@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invoice Preview</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="single-invoice-page">
+  <div class="single-actions">
+    <a href="index.html">Dashboard</a>
+    <button type="button" onclick="window.print()">Print</button>
+  </div>
+  <main id="singleInvoiceHost"></main>
+
+  <script src="utils.js"></script>
+  <script src="db.js"></script>
+  <script src="invoice.js"></script>
+</body>
+</html>

@@ -1,0 +1,565 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DocumentStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+  REVISED
+}
+
+enum TaxMode {
+  NON_GST
+  INTRA_STATE_GST
+  INTER_STATE_GST
+  EXEMPT
+}
+
+enum StockMovementType {
+  PURCHASE_IN
+  SALE_OUT
+  GHOST_DEDUCT
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  SALE_CANCEL_REVERSE
+  PURCHASE_CANCEL_REVERSE
+}
+
+enum ReferenceType {
+  PURCHASE_INVOICE
+  SALES_INVOICE
+  GHOST_BILL
+  STOCK_ADJUSTMENT
+}
+
+enum GhostBillStatus {
+  ACTIVE
+  VOID
+  CONVERTED
+}
+
+enum ImportSource {
+  MANUAL
+  OCR
+  EXCEL
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  settings          Setting[]
+  products          Product[]
+  services          Service[]
+  customers         Customer[]
+  suppliers         Supplier[]
+  documentSequences DocumentSequence[]
+  salesInvoices     SalesInvoice[]
+  quotations        Quotation[]
+  stockMovements    StockMovement[]
+  stockAdjustments  StockAdjustment[]
+  ghostBills        GhostBill[]
+  auditLogs         AuditLog[]
+}
+
+model User {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  email          String   @unique
+  passwordHash   String
+  displayName    String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization       Organization      @relation(fields: [organizationId], references: [id])
+  userRoles          UserRole[]
+  auditLogs          AuditLog[]
+  createdPurchases   PurchaseInvoice[] @relation("PurchaseCreatedBy")
+  confirmedPurchases PurchaseInvoice[] @relation("PurchaseConfirmedBy")
+  createdSales       SalesInvoice[]    @relation("SalesCreatedBy")
+  finalizedSales     SalesInvoice[]    @relation("SalesFinalizedBy")
+  createdQuotations  Quotation[]       @relation("QuotationCreatedBy")
+  finalizedQuotations Quotation[]     @relation("QuotationFinalizedBy")
+  createdGhostBills  GhostBill[]       @relation("GhostCreatedBy")
+  stockMovements     StockMovement[]
+  createdAdjustments StockAdjustment[]
+}
+
+model Role {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String     @unique
+  description String?
+  userRoles   UserRole[]
+}
+
+model UserRole {
+  userId String @db.Uuid
+  roleId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Setting {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  key            String
+  value          Json
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+}
+
+model Brand {
+  id       String    @id @default(uuid()) @db.Uuid
+  name     String
+  products Product[]
+
+  @@unique([name])
+}
+
+model Category {
+  id       String    @id @default(uuid()) @db.Uuid
+  name     String
+  products Product[]
+
+  @@unique([name])
+}
+
+model Unit {
+  id       String    @id @default(uuid()) @db.Uuid
+  code     String    @unique
+  name     String
+  products Product[]
+}
+
+model TaxRate {
+  id       String    @id @default(uuid()) @db.Uuid
+  name     String
+  rate     Decimal   @db.Decimal(5, 2)
+  products Product[]
+  services Service[]
+}
+
+model Product {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  sku            String
+  name           String
+  brandId        String?  @db.Uuid
+  categoryId     String?  @db.Uuid
+  unitId         String   @db.Uuid
+  taxRateId      String?  @db.Uuid
+  hsnCode        String?
+  purchasePrice  Decimal  @default(0) @db.Decimal(14, 2)
+  sellingPrice   Decimal  @default(0) @db.Decimal(14, 2)
+  currentStock   Decimal  @default(0) @db.Decimal(14, 3)
+  minimumStock   Decimal  @default(0) @db.Decimal(14, 3)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization     Organization          @relation(fields: [organizationId], references: [id])
+  brand            Brand?                @relation(fields: [brandId], references: [id])
+  category         Category?             @relation(fields: [categoryId], references: [id])
+  unit             Unit                  @relation(fields: [unitId], references: [id])
+  taxRate          TaxRate?              @relation(fields: [taxRateId], references: [id])
+  purchaseItems    PurchaseItem[]
+  salesItems       SalesItem[]
+  quotationItems   QuotationItem[]
+  stockMovements   StockMovement[]
+  stockAdjustments StockAdjustmentItem[]
+  ghostItems       GhostBillItem[]
+
+  @@unique([organizationId, sku])
+  @@index([organizationId, name])
+}
+
+model Service {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  code           String
+  name           String
+  description    String?
+  sacCode        String?
+  defaultRate    Decimal         @default(0) @db.Decimal(14, 2)
+  taxRateId      String?         @db.Uuid
+  isActive       Boolean         @default(true)
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  taxRate        TaxRate?        @relation(fields: [taxRateId], references: [id])
+  salesItems     SalesItem[]
+  quotationItems QuotationItem[]
+  ghostItems     GhostBillItem[]
+
+  @@unique([organizationId, code])
+}
+
+model Customer {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  name           String
+  customerType   String         @default("NON_GST")
+  gstNumber      String?
+  address        String?
+  phone          String?
+  email          String?
+  isActive       Boolean        @default(true)
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  salesInvoices  SalesInvoice[]
+  quotations     Quotation[]
+  ghostBills     GhostBill[]
+
+  @@index([organizationId, name])
+}
+
+model Supplier {
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String            @db.Uuid
+  name             String
+  gstNumber        String?
+  address          String?
+  phone            String?
+  email            String?
+  isActive         Boolean           @default(true)
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  purchaseInvoices PurchaseInvoice[]
+
+  @@index([organizationId, name])
+}
+
+model DocumentSequence {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  sequenceType   String
+  financialYear  String
+  prefix         String
+  lastNumber     Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, sequenceType, financialYear])
+}
+
+model PurchaseInvoice {
+  id                String         @id @default(uuid()) @db.Uuid
+  organizationId    String         @db.Uuid
+  internalNumber    String
+  supplierInvoiceNo String
+  invoiceDate       DateTime
+  supplierId        String         @db.Uuid
+  taxMode           TaxMode
+  placeOfSupply     String?
+  taxableTotal      Decimal        @default(0) @db.Decimal(14, 2)
+  cgstTotal         Decimal        @default(0) @db.Decimal(14, 2)
+  sgstTotal         Decimal        @default(0) @db.Decimal(14, 2)
+  igstTotal         Decimal        @default(0) @db.Decimal(14, 2)
+  totalTax          Decimal        @default(0) @db.Decimal(14, 2)
+  roundOff          Decimal        @default(0) @db.Decimal(14, 2)
+  grandTotal        Decimal        @default(0) @db.Decimal(14, 2)
+  status            DocumentStatus @default(DRAFT)
+  source            ImportSource   @default(MANUAL)
+  createdById       String         @db.Uuid
+  confirmedById     String?        @db.Uuid
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  supplier    Supplier             @relation(fields: [supplierId], references: [id])
+  items       PurchaseItem[]
+  attachments PurchaseAttachment[]
+  ocrJobs     OcrJob[]
+  createdBy   User                 @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
+  confirmedBy User?                @relation("PurchaseConfirmedBy", fields: [confirmedById], references: [id])
+
+  @@unique([organizationId, internalNumber])
+  @@index([organizationId, supplierInvoiceNo])
+}
+
+model PurchaseItem {
+  id           String          @id @default(uuid()) @db.Uuid
+  purchaseId   String          @db.Uuid
+  productId    String          @db.Uuid
+  description  String
+  hsnCode      String?
+  quantity     Decimal         @db.Decimal(14, 3)
+  unitPrice    Decimal         @db.Decimal(14, 2)
+  taxableValue Decimal         @db.Decimal(14, 2)
+  cgstRate     Decimal         @default(0) @db.Decimal(5, 2)
+  cgstAmount   Decimal         @default(0) @db.Decimal(14, 2)
+  sgstRate     Decimal         @default(0) @db.Decimal(5, 2)
+  sgstAmount   Decimal         @default(0) @db.Decimal(14, 2)
+  igstRate     Decimal         @default(0) @db.Decimal(5, 2)
+  igstAmount   Decimal         @default(0) @db.Decimal(14, 2)
+  totalAmount  Decimal         @db.Decimal(14, 2)
+  purchase     PurchaseInvoice @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product      Product         @relation(fields: [productId], references: [id])
+}
+
+model PurchaseAttachment {
+  id         String          @id @default(uuid()) @db.Uuid
+  purchaseId String          @db.Uuid
+  storageKey String
+  fileName   String
+  mimeType   String
+  checksum   String?
+  createdAt  DateTime        @default(now())
+  purchase   PurchaseInvoice @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+}
+
+model OcrJob {
+  id         String           @id @default(uuid()) @db.Uuid
+  purchaseId String?          @db.Uuid
+  provider   String
+  status     String           @default("PENDING")
+  rawResult  Json?
+  extracted  Json?
+  reviewedAt DateTime?
+  createdAt  DateTime         @default(now())
+  purchase   PurchaseInvoice? @relation(fields: [purchaseId], references: [id])
+}
+
+model SalesInvoice {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  invoiceNumber  String
+  invoiceDate    DateTime
+  customerId     String         @db.Uuid
+  taxMode        TaxMode
+  placeOfSupply  String?
+  taxableTotal   Decimal        @default(0) @db.Decimal(14, 2)
+  cgstTotal      Decimal        @default(0) @db.Decimal(14, 2)
+  sgstTotal      Decimal        @default(0) @db.Decimal(14, 2)
+  igstTotal      Decimal        @default(0) @db.Decimal(14, 2)
+  totalTax       Decimal        @default(0) @db.Decimal(14, 2)
+  roundOff       Decimal        @default(0) @db.Decimal(14, 2)
+  grandTotal     Decimal        @default(0) @db.Decimal(14, 2)
+  status         DocumentStatus @default(DRAFT)
+  createdById    String         @db.Uuid
+  finalizedById  String?        @db.Uuid
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  customer    Customer             @relation(fields: [customerId], references: [id])
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  items       SalesItem[]
+  createdBy   User                 @relation("SalesCreatedBy", fields: [createdById], references: [id])
+  finalizedBy User?                @relation("SalesFinalizedBy", fields: [finalizedById], references: [id])
+  conversion  GhostBillConversion?
+
+  @@unique([organizationId, invoiceNumber])
+}
+
+model SalesItem {
+  id           String       @id @default(uuid()) @db.Uuid
+  salesId      String       @db.Uuid
+  productId    String?      @db.Uuid
+  serviceId    String?      @db.Uuid
+  description  String
+  hsnSac       String?
+  quantity     Decimal      @db.Decimal(14, 3)
+  unitRate     Decimal      @db.Decimal(14, 2)
+  taxableValue Decimal      @db.Decimal(14, 2)
+  cgstRate     Decimal      @default(0) @db.Decimal(5, 2)
+  cgstAmount   Decimal      @default(0) @db.Decimal(14, 2)
+  sgstRate     Decimal      @default(0) @db.Decimal(5, 2)
+  sgstAmount   Decimal      @default(0) @db.Decimal(14, 2)
+  igstRate     Decimal      @default(0) @db.Decimal(5, 2)
+  igstAmount   Decimal      @default(0) @db.Decimal(14, 2)
+  totalAmount  Decimal      @db.Decimal(14, 2)
+  sales        SalesInvoice @relation(fields: [salesId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id])
+  service      Service?     @relation(fields: [serviceId], references: [id])
+
+  @@index([productId])
+  @@index([serviceId])
+}
+
+model Quotation {
+  id              String         @id @default(uuid()) @db.Uuid
+  organizationId  String         @db.Uuid
+  quotationNumber String
+  quotationDate   DateTime
+  validUntil      DateTime
+  customerId      String?        @db.Uuid
+  customerName    String
+  customerPhone   String?
+  customerAddress String?
+  taxMode         TaxMode
+  placeOfSupply   String?
+  taxableTotal    Decimal        @default(0) @db.Decimal(14, 2)
+  cgstTotal       Decimal        @default(0) @db.Decimal(14, 2)
+  sgstTotal       Decimal        @default(0) @db.Decimal(14, 2)
+  igstTotal       Decimal        @default(0) @db.Decimal(14, 2)
+  totalTax        Decimal        @default(0) @db.Decimal(14, 2)
+  roundOff        Decimal        @default(0) @db.Decimal(14, 2)
+  grandTotal      Decimal        @default(0) @db.Decimal(14, 2)
+  notes           String?
+  status          DocumentStatus @default(DRAFT)
+  createdById     String         @db.Uuid
+  finalizedById   String?        @db.Uuid
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  organization  Organization     @relation(fields: [organizationId], references: [id])
+  customer      Customer?        @relation(fields: [customerId], references: [id])
+  items         QuotationItem[]
+  createdBy     User             @relation("QuotationCreatedBy", fields: [createdById], references: [id])
+  finalizedBy   User?            @relation("QuotationFinalizedBy", fields: [finalizedById], references: [id])
+
+  @@unique([organizationId, quotationNumber])
+}
+
+model QuotationItem {
+  id            String      @id @default(uuid()) @db.Uuid
+  quotationId   String      @db.Uuid
+  productId     String?     @db.Uuid
+  serviceId     String?     @db.Uuid
+  description   String
+  hsnSac        String?
+  quantity      Decimal     @db.Decimal(14, 3)
+  unitRate      Decimal     @db.Decimal(14, 2)
+  taxableValue  Decimal     @db.Decimal(14, 2)
+  cgstRate      Decimal     @default(0) @db.Decimal(5, 2)
+  cgstAmount    Decimal     @default(0) @db.Decimal(14, 2)
+  sgstRate      Decimal     @default(0) @db.Decimal(5, 2)
+  sgstAmount    Decimal     @default(0) @db.Decimal(14, 2)
+  igstRate      Decimal     @default(0) @db.Decimal(5, 2)
+  igstAmount    Decimal     @default(0) @db.Decimal(14, 2)
+  totalAmount   Decimal     @db.Decimal(14, 2)
+  quotation     Quotation   @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product       Product?    @relation(fields: [productId], references: [id])
+  service       Service?    @relation(fields: [serviceId], references: [id])
+
+  @@index([productId])
+  @@index([serviceId])
+}
+
+model StockMovement {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  productId      String            @db.Uuid
+  movementType   StockMovementType
+  referenceType  ReferenceType
+  referenceId    String            @db.Uuid
+  quantityIn     Decimal           @default(0) @db.Decimal(14, 3)
+  quantityOut    Decimal           @default(0) @db.Decimal(14, 3)
+  stockBefore    Decimal           @db.Decimal(14, 3)
+  stockAfter     Decimal           @db.Decimal(14, 3)
+  unitCost       Decimal?          @db.Decimal(14, 2)
+  notes          String?
+  createdById    String            @db.Uuid
+  createdAt      DateTime          @default(now())
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  product        Product           @relation(fields: [productId], references: [id])
+  createdBy      User              @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId, productId, createdAt])
+  @@index([referenceType, referenceId])
+}
+
+model StockAdjustment {
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @db.Uuid
+  reason         String
+  status         DocumentStatus        @default(DRAFT)
+  createdById    String                @db.Uuid
+  createdAt      DateTime              @default(now())
+  organization   Organization          @relation(fields: [organizationId], references: [id])
+  items          StockAdjustmentItem[]
+  createdBy      User                  @relation(fields: [createdById], references: [id])
+}
+
+model StockAdjustmentItem {
+  id           String          @id @default(uuid()) @db.Uuid
+  adjustmentId String          @db.Uuid
+  productId    String          @db.Uuid
+  quantity     Decimal         @db.Decimal(14, 3)
+  direction    String
+  adjustment   StockAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+  product      Product         @relation(fields: [productId], references: [id])
+}
+
+model GhostBill {
+  id             String                    @id @default(uuid()) @db.Uuid
+  organizationId String                    @db.Uuid
+  billNumber     String
+  billDate       DateTime
+  customerId     String?                   @db.Uuid
+  customerName   String
+  taxMode        TaxMode
+  taxableTotal   Decimal                   @default(0) @db.Decimal(14, 2)
+  totalTax       Decimal                   @default(0) @db.Decimal(14, 2)
+  grandTotal     Decimal                   @default(0) @db.Decimal(14, 2)
+  status         GhostBillStatus           @default(ACTIVE)
+  stockDeducted  Boolean                   @default(false)
+  createdById    String                    @db.Uuid
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  organization   Organization              @relation(fields: [organizationId], references: [id])
+  customer       Customer?                 @relation(fields: [customerId], references: [id])
+  createdBy      User                      @relation("GhostCreatedBy", fields: [createdById], references: [id])
+  items          GhostBillItem[]
+  deductions     GhostBillStockDeduction[]
+  conversion     GhostBillConversion?
+
+  @@unique([organizationId, billNumber])
+}
+
+model GhostBillItem {
+  id           String    @id @default(uuid()) @db.Uuid
+  ghostBillId  String    @db.Uuid
+  productId    String?   @db.Uuid
+  serviceId    String?   @db.Uuid
+  description  String
+  hsnSac       String?
+  quantity     Decimal   @db.Decimal(14, 3)
+  unitRate     Decimal   @db.Decimal(14, 2)
+  taxableValue Decimal   @db.Decimal(14, 2)
+  totalAmount  Decimal   @db.Decimal(14, 2)
+  ghostBill    GhostBill @relation(fields: [ghostBillId], references: [id], onDelete: Cascade)
+  product      Product?  @relation(fields: [productId], references: [id])
+  service      Service?  @relation(fields: [serviceId], references: [id])
+}
+
+model GhostBillStockDeduction {
+  id          String    @id @default(uuid()) @db.Uuid
+  ghostBillId String    @db.Uuid
+  movementId  String    @unique @db.Uuid
+  createdAt   DateTime  @default(now())
+  ghostBill   GhostBill @relation(fields: [ghostBillId], references: [id], onDelete: Cascade)
+}
+
+model GhostBillConversion {
+  id          String       @id @default(uuid()) @db.Uuid
+  ghostBillId String       @unique @db.Uuid
+  salesId     String       @unique @db.Uuid
+  convertedAt DateTime     @default(now())
+  ghostBill   GhostBill    @relation(fields: [ghostBillId], references: [id])
+  sales       SalesInvoice @relation(fields: [salesId], references: [id])
+}
+
+model AuditLog {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  userId         String?      @db.Uuid
+  action         String
+  entityType     String
+  entityId       String?
+  beforeData     Json?
+  afterData      Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, entityType, entityId])
+}

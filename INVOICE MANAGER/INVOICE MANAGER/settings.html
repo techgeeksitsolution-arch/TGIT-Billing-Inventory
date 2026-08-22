@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings - TGIT Bulk Invoice Generator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Settings</h1>
+      <p>Stored permanently in Local Storage and IndexedDB</p>
+    </div>
+    <nav><a href="index.html">Dashboard</a></nav>
+  </header>
+
+  <main class="settings-shell">
+    <form id="settingsForm" class="settings-form">
+      <label>Company Name<input id="companyName" type="text"></label>
+      <label>GSTIN<input id="gstin" type="text"></label>
+      <label>Phone<input id="phone" type="text"></label>
+      <label>Address<textarea id="address" rows="3"></textarea></label>
+      <label>UDYAM<input id="udyam" type="text"></label>
+      <label>Bank Details<textarea id="bankDetails" rows="4"></textarea></label>
+
+      <div class="asset-row">
+        <label>Logo<input id="logoFile" type="file" accept="image/*"></label>
+        <img id="logoPreview" alt="" hidden>
+        <button id="clearLogo" type="button">Clear Logo</button>
+      </div>
+
+      <div class="asset-row">
+        <label>Signature<input id="signatureFile" type="file" accept="image/*"></label>
+        <img id="signaturePreview" alt="" hidden>
+        <button id="clearSignature" type="button">Clear Signature</button>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit">Save Settings</button>
+        <button id="restoreDefaults" type="button">Restore Defaults</button>
+      </div>
+      <p id="settingsStatus" class="status-line"></p>
+    </form>
+  </main>
+
+  <script src="utils.js"></script>
+  <script src="db.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

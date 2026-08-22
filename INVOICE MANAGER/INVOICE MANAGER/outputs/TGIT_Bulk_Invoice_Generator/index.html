@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TGIT Bulk Invoice Generator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>TGIT Bulk Invoice Generator</h1>
+      <p>Offline GST invoice generation from Sale Data.xlsx</p>
+    </div>
+    <nav>
+      <a href="manual.html">Manual Entry</a>
+      <a href="settings.html">Settings</a>
+      <label class="toggle"><input id="darkMode" type="checkbox"> Dark Mode</label>
+    </nav>
+  </header>
+
+  <main class="app-shell">
+    <aside class="control-panel">
+      <section>
+        <h2>Dashboard</h2>
+        <div class="counter-grid">
+          <div><span id="invoiceCount">0</span><small>Total Invoices</small></div>
+          <div><span id="visibleCount">0</span><small>Matching</small></div>
+          <div><span id="position">0 / 0</span><small>Preview</small></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Excel Upload</h2>
+        <input id="excelFile" type="file" accept=".xlsx,.xls">
+        <progress id="progressBar" value="0" max="100"></progress>
+        <p id="progressText">Waiting for Sale Data.xlsx</p>
+      </section>
+
+      <section>
+        <h2>Search Invoice</h2>
+        <input id="search" type="search" placeholder="Invoice no, customer, date, GST number">
+      </section>
+
+      <section class="button-grid">
+        <button id="prevBtn" type="button">Previous Invoice</button>
+        <button id="nextBtn" type="button">Next Invoice</button>
+        <button id="printBtn" type="button">Print</button>
+        <button id="downloadBtn" type="button">Download Current PDF</button>
+        <button id="editBtn" type="button">Edit Invoice</button>
+        <button id="duplicateBtn" type="button">Duplicate Invoice</button>
+        <button id="deleteBtn" type="button">Delete Invoice</button>
+        <a class="button-link" href="manual.html">Create Manual Invoice</a>
+        <button id="allPdfBtn" type="button">Generate All PDFs</button>
+        <button id="selectRegisterBtn" type="button">Select Invoice_Register.xlsx</button>
+        <button id="exportRegisterBtn" type="button">Export Invoice_Register.xlsx</button>
+      </section>
+    </aside>
+
+    <section class="preview-panel">
+      <div id="preview" class="preview-scroll">
+        <div class="empty-state">Upload Sale Data.xlsx or search previous invoices.</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="libs/xlsx.full.min.js"></script>
+  <script src="libs/jspdf.umd.min.js"></script>
+  <script src="libs/html2canvas.min.js"></script>
+  <script src="utils.js"></script>
+  <script src="db.js"></script>
+  <script src="excel.js"></script>
+  <script src="invoice.js"></script>
+  <script src="pdf.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

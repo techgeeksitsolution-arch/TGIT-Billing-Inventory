@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manual Invoice Entry - TGIT Bulk Invoice Generator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Manual Invoice Entry</h1>
+      <p>Create, edit, duplicate, print, and download invoices offline</p>
+    </div>
+    <nav>
+      <a href="index.html">Dashboard</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+  </header>
+
+  <main class="manual-shell">
+    <form id="manualForm" class="manual-form">
+      <section class="manual-section">
+        <h2>Invoice Details</h2>
+        <div class="form-grid">
+          <label>Invoice Number<input id="invoiceNo" required></label>
+          <label>Invoice Date<input id="invoiceDate" type="date" required></label>
+          <label>Customer Name<input id="customerName" required></label>
+          <label>GST Number<input id="gstNumber"></label>
+          <label class="wide">Address<textarea id="address" rows="3"></textarea></label>
+          <label class="wide">Reference Number<input id="reference"></label>
+        </div>
+      </section>
+
+      <section class="manual-section">
+        <div class="section-head">
+          <h2>Products</h2>
+          <button id="addProductRow" type="button">Add Product</button>
+        </div>
+        <datalist id="productSuggestions"></datalist>
+        <div class="manual-table-wrap">
+          <table class="manual-product-table">
+            <thead>
+              <tr>
+                <th>Product Description</th>
+                <th>HSN/SAC</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>GST %</th>
+                <th>Taxable</th>
+                <th>CGST</th>
+                <th>SGST</th>
+                <th>Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="productRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="manual-section">
+        <div class="section-head">
+          <h2>Product Master</h2>
+          <button id="saveMasterProduct" type="button">Add / Update Product</button>
+        </div>
+        <div class="form-grid product-master-grid">
+          <label>Product Name<input id="masterName" list="productSuggestions"></label>
+          <label>HSN/SAC<input id="masterHsn"></label>
+          <label>GST %<input id="masterGst" type="number" min="0" step="0.01"></label>
+          <label>Default Rate<input id="masterRate" type="number" min="0" step="0.01"></label>
+        </div>
+      </section>
+
+      <section class="manual-section">
+        <h2>Totals</h2>
+        <div class="totals-grid">
+          <label>Taxable Amount<input id="taxableAmount" readonly></label>
+          <label>CGST<input id="cgstAmount" readonly></label>
+          <label>SGST<input id="sgstAmount" readonly></label>
+          <label>SubTotal<input id="subTotal" readonly></label>
+          <label>Round Off<input id="roundOff" readonly></label>
+          <label>Grand Total<input id="grandTotal" readonly></label>
+          <label>Balance<input id="balance" readonly></label>
+          <label class="wide">Amount in Words<input id="amountWords" readonly></label>
+        </div>
+      </section>
+
+      <section class="manual-actions">
+        <button type="submit">Save Invoice</button>
+        <button id="printNow" type="button">Print Immediately</button>
+        <button id="downloadNow" type="button">Download PDF Immediately</button>
+        <button id="duplicateInvoice" type="button">Duplicate Invoice</button>
+        <button id="deleteInvoice" type="button">Delete Invoice</button>
+        <button id="exportRegisterManual" type="button">Export Invoice_Register.xlsx</button>
+        <a class="button-link" href="index.html">Invoice History</a>
+      </section>
+      <p id="manualStatus" class="status-line"></p>
+    </form>
+
+    <section class="manual-preview">
+      <h2>Preview</h2>
+      <div id="manualPreview" class="preview-scroll"></div>
+    </section>
+  </main>
+
+  <script src="libs/xlsx.full.min.js"></script>
+  <script src="libs/jspdf.umd.min.js"></script>
+  <script src="libs/html2canvas.min.js"></script>
+  <script src="utils.js"></script>
+  <script src="db.js"></script>
+  <script src="excel.js"></script>
+  <script src="invoice.js"></script>
+  <script src="pdf.js"></script>
+  <script src="manual.js"></script>
+</body>
+</html>
