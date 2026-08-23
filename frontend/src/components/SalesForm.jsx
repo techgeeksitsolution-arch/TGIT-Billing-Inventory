@@ -43,6 +43,7 @@ export function SalesForm() {
   const [form, setForm] = useState({
     customerId: "",
     invoiceDate: new Date().toISOString().split("T")[0],
+    workOrderNo: "",
     taxMode: "NON_GST",
     placeOfSupply: "",
     items: [{ ...EMPTY_ITEM }],
@@ -62,6 +63,7 @@ export function SalesForm() {
           setForm({
             customerId: inv.customerId || "",
             invoiceDate: inv.invoiceDate?.split("T")[0] || "",
+            workOrderNo: inv.workOrderNo || "",
             taxMode: inv.taxMode,
             placeOfSupply: inv.placeOfSupply || "",
             items: inv.items?.length ? inv.items.map(i => ({
@@ -144,6 +146,7 @@ export function SalesForm() {
       const payload = {
         customerId: form.customerId || undefined,
         invoiceDate: form.invoiceDate,
+        workOrderNo: form.workOrderNo || undefined,
         taxMode: form.taxMode,
         placeOfSupply: form.placeOfSupply || undefined,
         items: form.items.map(i => ({
@@ -190,6 +193,10 @@ export function SalesForm() {
           <div className="form-group">
             <label>Invoice Date</label>
             <input type="date" value={form.invoiceDate} onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label>Work Order No. (optional)</label>
+            <input type="text" value={form.workOrderNo} onChange={(e) => setForm({ ...form, workOrderNo: e.target.value })} placeholder="e.g. WO-2026-001" />
           </div>
           <div className="form-group">
             <label>Tax Mode</label>

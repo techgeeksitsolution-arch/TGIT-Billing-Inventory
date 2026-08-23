@@ -138,6 +138,8 @@ export async function createSalesInvoice(organizationId, data) {
       customerId: data.customerId,
       taxMode: data.taxMode || "NON_GST",
       placeOfSupply: data.placeOfSupply || null,
+      workOrderNo: data.workOrderNo || null,
+      quotationReference: data.quotationReference || null,
       ...totals,
       status: "DRAFT",
       createdById: user.id,
@@ -165,13 +167,24 @@ export async function updateSalesInvoice(id, organizationId, data) {
       await prisma.salesItem.create({ data: { ...pi, salesId: id } });
     }
     const totals = calculateInvoiceTotals(processedItems, data.taxMode || existing.taxMode);
-    await prisma.salesInvoice.update({ where: { id }, data: { ...totals, customerId: data.customerId || existing.customerId, taxMode: data.taxMode || existing.taxMode, placeOfSupply: data.placeOfSupply !== undefined ? data.placeOfSupply : existing.placeOfSupply, invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : existing.invoiceDate } });
+    const invoiceUpdate = {
+      ...totals,
+      customerId: data.customerId || existing.customerId,
+      taxMode: data.taxMode || existing.taxMode,
+      placeOfSupply: data.placeOfSupply !== undefined ? data.placeOfSupply : existing.placeOfSupply,
+      invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : existing.invoiceDate,
+    };
+    if (data.workOrderNo !== undefined) invoiceUpdate.workOrderNo = data.workOrderNo || null;
+    if (data.quotationReference !== undefined) invoiceUpdate.quotationReference = data.quotationReference || null;
+    await prisma.salesInvoice.update({ where: { id }, data: invoiceUpdate });
   } else {
     const updateData = {};
     if (data.customerId) updateData.customerId = data.customerId;
     if (data.taxMode) updateData.taxMode = data.taxMode;
     if (data.placeOfSupply !== undefined) updateData.placeOfSupply = data.placeOfSupply;
     if (data.invoiceDate) updateData.invoiceDate = new Date(data.invoiceDate);
+    if (data.workOrderNo !== undefined) updateData.workOrderNo = data.workOrderNo || null;
+    if (data.quotationReference !== undefined) updateData.quotationReference = data.quotationReference || null;
     if (Object.keys(updateData).length > 0) await prisma.salesInvoice.update({ where: { id }, data: updateData });
   }
 

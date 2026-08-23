@@ -45,6 +45,7 @@ export function QuotationForm() {
     customerName: "",
     customerPhone: "",
     customerAddress: "",
+    workOrderNo: "",
     quotationDate: new Date().toISOString().split("T")[0],
     taxMode: "NON_GST",
     placeOfSupply: "",
@@ -68,6 +69,7 @@ export function QuotationForm() {
             customerName: q.customerName || "",
             customerPhone: q.customerPhone || "",
             customerAddress: q.customerAddress || "",
+            workOrderNo: q.workOrderNo || "",
             quotationDate: q.quotationDate?.split("T")[0] || "",
             taxMode: q.taxMode,
             placeOfSupply: q.placeOfSupply || "",
@@ -165,6 +167,7 @@ export function QuotationForm() {
         customerName: form.customerName || "Walk-in Customer",
         customerPhone: form.customerPhone || undefined,
         customerAddress: form.customerAddress || undefined,
+        workOrderNo: form.workOrderNo || undefined,
         quotationDate: form.quotationDate,
         taxMode: form.taxMode,
         placeOfSupply: form.placeOfSupply || undefined,
@@ -229,6 +232,10 @@ export function QuotationForm() {
           <div className="form-group">
             <label>Quotation Date</label>
             <input type="date" value={form.quotationDate} onChange={(e) => setForm({ ...form, quotationDate: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label>Work Order No. (optional)</label>
+            <input type="text" value={form.workOrderNo} onChange={(e) => setForm({ ...form, workOrderNo: e.target.value })} placeholder="e.g. WO-2026-001" />
           </div>
           <div className="form-group">
             <label>Tax Mode</label>

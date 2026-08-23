@@ -214,3 +214,12 @@ body { min-width: 320px; }
   .validity-banner { background: #fff3cd !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .status-badge, .status-badge-inline { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Settings tabs + terms */
+.settings-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.tab { background: #0b2540; color: #9fb3c8; border: 1px solid #1b3a5b; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.88rem; }
+.tab:hover { color: #e3f0ff; }
+.tab.active { background: #122c4f; color: #7fe0ff; border-color: #2b6cb0; }
+.terms-list { list-style: none; padding: 0; margin: 0; }
+.term-item { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #1b3a5b; border-radius: 6px; margin-bottom: 8px; background: #0b2540; }
+.term-item input { background: #06182e; border: 1px solid #1b3a5b; color: #e3f0ff; border-radius: 4px; padding: 6px 10px; }

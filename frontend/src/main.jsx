@@ -1,4 +1,6 @@
+import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
+import "./styles.css";
 import { Dashboard } from "./components/Dashboard";
 import { SalesList } from "./components/SalesList";
 import { SalesForm } from "./components/SalesForm";
@@ -71,3 +73,5 @@ function App() {
 }
 
 export default App;
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);

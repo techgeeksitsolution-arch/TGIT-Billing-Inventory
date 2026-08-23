@@ -35,3 +35,105 @@ settingsRouter.put("/financial-year", async (req, res, next) => {
     res.json({ financialYear });
   } catch (e) { next(e); }
 });
+
+async function getOrCreateProfile(orgId) {
+  let profile = await prisma.companyProfile.findUnique({ where: { organizationId: orgId } });
+  if (!profile) {
+    profile = await prisma.companyProfile.create({ data: { organizationId: orgId } });
+  }
+  return profile;
+}
+
+settingsRouter.get("/company-profile", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const profile = await getOrCreateProfile(org.id);
+    res.json(profile);
+  } catch (e) { next(e); }
+});
+
+settingsRouter.put("/company-profile", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const fields = ["name", "gstin", "udyam", "address", "phone", "mobile", "email", "website", "state", "pin", "bankName", "branch", "accountName", "accountNumber", "ifsc", "upiId", "invoiceFooter", "invoiceNotes", "logoStorageKey"];
+    const data = {};
+    for (const f of fields) {
+      if (req.body[f] !== undefined) data[f] = req.body[f] === "" ? null : req.body[f];
+    }
+    const profile = await prisma.companyProfile.upsert({
+      where: { organizationId: org.id },
+      update: data,
+      create: { organizationId: org.id, ...data },
+    });
+    res.json(profile);
+  } catch (e) { next(e); }
+});
+
+settingsRouter.get("/terms", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const termType = req.query.type || "SALES";
+    const terms = await prisma.documentTerm.findMany({
+      where: { organizationId: org.id, termType },
+      orderBy: { sortOrder: "asc" },
+    });
+    res.json(terms);
+  } catch (e) { next(e); }
+});
+
+settingsRouter.post("/terms", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const { termType, text, sortOrder, isEnabled } = req.body;
+    if (!termType || !text) return res.status(400).json({ error: { code: "INVALID_INPUT", message: "termType and text are required" } });
+    const count = await prisma.documentTerm.count({ where: { organizationId: org.id, termType } });
+    const term = await prisma.documentTerm.create({
+      data: {
+        organizationId: org.id,
+        termType,
+        text,
+        sortOrder: sortOrder != null ? sortOrder : count,
+        isEnabled: isEnabled !== undefined ? isEnabled : true,
+      },
+    });
+    res.status(201).json(term);
+  } catch (e) { next(e); }
+});
+
+settingsRouter.put("/terms/:id", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const { text, sortOrder, isEnabled } = req.body;
+    const data = {};
+    if (text !== undefined) data.text = text;
+    if (sortOrder !== undefined) data.sortOrder = sortOrder;
+    if (isEnabled !== undefined) data.isEnabled = isEnabled;
+    const term = await prisma.documentTerm.update({
+      where: { id: req.params.id },
+      data,
+    });
+    res.json(term);
+  } catch (e) { next(e); }
+});
+
+settingsRouter.delete("/terms/:id", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    await prisma.documentTerm.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+settingsRouter.post("/terms/reorder", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) return res.status(400).json({ error: { code: "INVALID_INPUT", message: "orderedIds array required" } });
+    await prisma.$transaction(
+      orderedIds.map((id, idx) =>
+        prisma.documentTerm.update({ where: { id }, data: { sortOrder: idx } })
+      )
+    );
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});

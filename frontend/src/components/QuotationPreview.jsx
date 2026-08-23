@@ -39,13 +39,17 @@ export function QuotationPreview() {
   const [finalizing, setFinalizing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState(null);
-  const [orgName] = useState("Tech Geeks IT Solution");
+  const [profile, setProfile] = useState({ name: "Tech Geeks IT Solution" });
+  const [terms, setTerms] = useState([]);
+  const [converting, setConverting] = useState(false);
 
   useEffect(() => {
     fetch(`/api/v1/quotations/${id}`)
       .then(r => { if (!r.ok) throw new Error("Not found"); return r.json(); })
       .then(data => { setQuotation(data); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
+    fetch("/api/v1/settings/company-profile").then(r => r.json()).then(setProfile).catch(() => {});
+    fetch("/api/v1/settings/terms?type=QUOTATION").then(r => r.json()).then(d => setTerms(Array.isArray(d) ? d.filter(t => t.isEnabled) : [])).catch(() => setTerms([]));
   }, [id]);
 
   const handleFinalize = async () => {
@@ -59,6 +63,20 @@ export function QuotationPreview() {
       setError(e.message);
     } finally {
       setFinalizing(false);
+    }
+  };
+
+  const handleConvert = async () => {
+    if (!confirm("Convert this quotation into a new Sales Invoice?")) return;
+    setConverting(true);
+    setError(null);
+    try {
+      const result = await apiPost(`/quotations/${id}/convert`);
+      navigate(`/sales/${result.salesInvoice.id}`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -91,6 +109,9 @@ export function QuotationPreview() {
         <div className="header-actions">
           {q.status === "DRAFT" && (
             <>
+              <button className="btn btn-primary" onClick={handleConvert} disabled={converting}>
+                {converting ? "Converting..." : "Convert to Bill"}
+              </button>
               <button className="btn btn-primary" onClick={handleFinalize} disabled={finalizing}>
                 {finalizing ? "Confirming..." : "Confirm Quotation"}
               </button>
@@ -115,7 +136,7 @@ export function QuotationPreview() {
             <div className="invoice-brand">
               <img src="/TGIT.png" alt="TGIT" className="invoice-logo" onError={(e) => { e.target.style.display = "none"; }} />
               <div>
-                <h2 className="org-name">{orgName}</h2>
+                <h2 className="org-name">{profile.name}</h2>
                 <p className="org-tagline">Tech Geeks IT Solution</p>
               </div>
             </div>
@@ -138,6 +159,7 @@ export function QuotationPreview() {
               <div className="meta-row"><span className="meta-label">Valid Until:</span><span className="meta-value">{new Date(q.validUntil).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>
               <div className="meta-row"><span className="meta-label">Tax Mode:</span><span className="meta-value">{q.taxMode.replace(/_/g, " ")}</span></div>
               {q.placeOfSupply && <div className="meta-row"><span className="meta-label">Place of Supply:</span><span className="meta-value">{q.placeOfSupply}</span></div>}
+              {q.workOrderNo && <div className="meta-row"><span className="meta-label">Work Order No.:</span><span className="meta-value">{q.workOrderNo}</span></div>}
             </div>
             <div className="meta-group">
               <div className="meta-row"><span className="meta-label">To:</span><span className="meta-value">{q.customerName || "Walk-in Customer"}</span></div>
@@ -213,14 +235,20 @@ export function QuotationPreview() {
           <div className="invoice-bottom">
             <div className="terms-conditions">
               <h4>Terms & Conditions</h4>
-              <ul>
-                <li>This quotation is valid for 1 Week from the date of issue.</li>
-                <li>Prices are inclusive/exclusive of applicable GST as mentioned.</li>
-                <li>Payment terms as per mutual agreement.</li>
-              </ul>
+              {terms.length === 0 ? (
+                <ul>
+                  <li>This quotation is valid for 1 Week from the date of issue.</li>
+                  <li>Prices are inclusive/exclusive of applicable GST as mentioned.</li>
+                  <li>Payment terms as per mutual agreement.</li>
+                </ul>
+              ) : (
+                <ul>
+                  {terms.map(t => <li key={t.id}>{t.text}</li>)}
+                </ul>
+              )}
             </div>
             <div className="authorized-signatory">
-              <p>For {orgName}</p>
+              <p>For {profile.name}</p>
               <div className="signature-line"></div>
               <p>Authorized Signatory</p>
             </div>

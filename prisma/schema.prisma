@@ -69,6 +69,8 @@ model Organization {
   stockAdjustments  StockAdjustment[]
   ghostBills        GhostBill[]
   auditLogs         AuditLog[]
+  companyProfile    CompanyProfile?
+  documentTerms     DocumentTerm[]
 }
 
 model User {
@@ -329,14 +331,16 @@ model OcrJob {
 }
 
 model SalesInvoice {
-  id             String         @id @default(uuid()) @db.Uuid
-  organizationId String         @db.Uuid
-  invoiceNumber  String
-  invoiceDate    DateTime
-  customerId     String         @db.Uuid
-  taxMode        TaxMode
-  placeOfSupply  String?
-  taxableTotal   Decimal        @default(0) @db.Decimal(14, 2)
+  id                  String         @id @default(uuid()) @db.Uuid
+  organizationId      String         @db.Uuid
+  invoiceNumber       String
+  invoiceDate         DateTime
+  customerId          String?        @db.Uuid
+  taxMode             TaxMode
+  placeOfSupply       String?
+  quotationReference  String?
+  workOrderNo         String?
+  taxableTotal        Decimal        @default(0) @db.Decimal(14, 2)
   cgstTotal      Decimal        @default(0) @db.Decimal(14, 2)
   sgstTotal      Decimal        @default(0) @db.Decimal(14, 2)
   igstTotal      Decimal        @default(0) @db.Decimal(14, 2)
@@ -349,7 +353,7 @@ model SalesInvoice {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  customer    Customer             @relation(fields: [customerId], references: [id])
+  customer    Customer?            @relation(fields: [customerId], references: [id])
   organization Organization        @relation(fields: [organizationId], references: [id])
   items       SalesItem[]
   createdBy   User                 @relation("SalesCreatedBy", fields: [createdById], references: [id])
@@ -390,6 +394,7 @@ model Quotation {
   quotationNumber String
   quotationDate   DateTime
   validUntil      DateTime
+  workOrderNo     String?
   customerId      String?        @db.Uuid
   customerName    String
   customerPhone   String?
@@ -546,6 +551,50 @@ model GhostBillConversion {
   convertedAt DateTime     @default(now())
   ghostBill   GhostBill    @relation(fields: [ghostBillId], references: [id])
   sales       SalesInvoice @relation(fields: [salesId], references: [id])
+}
+
+model CompanyProfile {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String   @default("Tech Geeks IT Solution")
+  gstin          String?
+  udyam          String?
+  address        String?
+  phone          String?
+  mobile          String?
+  email          String?
+  website        String?
+  state          String?
+  pin            String?
+  bankName       String?
+  branch         String?
+  accountName    String?
+  accountNumber  String?
+  ifsc           String?
+  upiId          String?
+  invoiceFooter  String?
+  invoiceNotes   String?
+  logoStorageKey String?
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId])
+}
+
+model DocumentTerm {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  termType       String
+  text           String
+  sortOrder      Int      @default(0)
+  isEnabled      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, termType, sortOrder])
+  @@index([organizationId, termType])
 }
 
 model AuditLog {

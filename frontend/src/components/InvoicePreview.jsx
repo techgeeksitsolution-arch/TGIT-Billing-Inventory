@@ -39,13 +39,14 @@ export function InvoicePreview() {
   const [finalizing, setFinalizing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState(null);
-  const [orgName, setOrgName] = useState("Tech Geeks IT Solution");
+  const [profile, setProfile] = useState({ name: "Tech Geeks IT Solution" });
 
   useEffect(() => {
     fetch(`/api/v1/sales/${id}`)
       .then(r => { if (!r.ok) throw new Error("Not found"); return r.json(); })
       .then(data => { setInvoice(data); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
+    fetch("/api/v1/settings/company-profile").then(r => r.json()).then(setProfile).catch(() => {});
   }, [id]);
 
   const handleFinalize = async () => {
@@ -114,7 +115,7 @@ export function InvoicePreview() {
             <div className="invoice-brand">
               <img src="/TGIT.png" alt="TGIT" className="invoice-logo" onError={(e) => { e.target.style.display = "none"; }} />
               <div>
-                <h2 className="org-name">{orgName}</h2>
+                <h2 className="org-name">{profile.name}</h2>
                 <p className="org-tagline">Tech Geeks IT Solution</p>
               </div>
             </div>
@@ -132,6 +133,8 @@ export function InvoicePreview() {
               <div className="meta-row"><span className="meta-label">Date:</span><span className="meta-value">{new Date(inv.invoiceDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>
               <div className="meta-row"><span className="meta-label">Tax Mode:</span><span className="meta-value">{inv.taxMode.replace(/_/g, " ")}</span></div>
               {inv.placeOfSupply && <div className="meta-row"><span className="meta-label">Place of Supply:</span><span className="meta-value">{inv.placeOfSupply}</span></div>}
+              {inv.workOrderNo && <div className="meta-row"><span className="meta-label">Work Order No.:</span><span className="meta-value">{inv.workOrderNo}</span></div>}
+              {inv.quotationReference && <div className="meta-row"><span className="meta-label">Quotation Ref:</span><span className="meta-value mono">{inv.quotationReference}</span></div>}
             </div>
             <div className="meta-group">
               <div className="meta-row"><span className="meta-label">Bill To:</span><span className="meta-value">{inv.customer?.name || "Walk-in Customer"}</span></div>
@@ -205,7 +208,7 @@ export function InvoicePreview() {
               <p>Bank: [Your Bank Name]<br/>A/C No: [Your Account Number]<br/>IFSC: [Your IFSC Code]<br/>Branch: [Your Branch]</p>
             </div>
             <div className="authorized-signatory">
-              <p>For {orgName}</p>
+              <p>For {profile.name}</p>
               <div className="signature-line"></div>
               <p>Authorized Signatory</p>
             </div>

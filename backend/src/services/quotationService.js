@@ -85,6 +85,7 @@ export async function createQuotation(organizationId, data) {
       customerName: data.customerName || "",
       customerPhone: data.customerPhone || null,
       customerAddress: data.customerAddress || null,
+      workOrderNo: data.workOrderNo || null,
       taxMode: data.taxMode || "NON_GST",
       placeOfSupply: data.placeOfSupply || null,
       notes: data.notes || null,
@@ -123,6 +124,7 @@ export async function updateQuotation(id, organizationId, data) {
     if (data.customerId !== undefined) updatePayload.customerId = data.customerId;
     if (data.customerPhone !== undefined) updatePayload.customerPhone = data.customerPhone;
     if (data.customerAddress !== undefined) updatePayload.customerAddress = data.customerAddress;
+    if (data.workOrderNo !== undefined) updatePayload.workOrderNo = data.workOrderNo || null;
     if (data.validUntil) updatePayload.validUntil = new Date(data.validUntil);
     if (data.notes !== undefined) updatePayload.notes = data.notes;
     if (data.placeOfSupply !== undefined) updatePayload.placeOfSupply = data.placeOfSupply;
@@ -143,6 +145,44 @@ export async function updateQuotation(id, organizationId, data) {
   }
 
   return getQuotation(id, organizationId);
+}
+
+export async function convertQuotationToSales(id, organizationId) {
+  const existing = await prisma.quotation.findFirst({
+    where: { id, organizationId },
+    include: { items: { include: { product: true, service: true } } },
+  });
+  if (!existing) throw Object.assign(new Error("Quotation not found"), { statusCode: 404 });
+  if (existing.status === "CANCELLED") throw Object.assign(new Error("Cancelled quotation cannot be converted"), { statusCode: 400 });
+
+  const already = await prisma.salesInvoice.findFirst({
+    where: { organizationId, quotationReference: existing.quotationNumber },
+  });
+  if (already) throw Object.assign(new Error("This quotation has already been converted"), { statusCode: 400 });
+
+  const { createSalesInvoice } = await import("./salesService.js");
+
+  const toNum = (v) => (v && typeof v === "object" && typeof v.toNumber === "function" ? v.toNumber() : Number(v));
+
+  const salesPayload = {
+    customerId: existing.customerId || undefined,
+    invoiceDate: new Date().toISOString().split("T")[0],
+    taxMode: existing.taxMode,
+    placeOfSupply: existing.placeOfSupply || undefined,
+    workOrderNo: existing.workOrderNo || undefined,
+    quotationReference: existing.quotationNumber,
+    items: existing.items.map((i) => ({
+      productId: i.productId || undefined,
+      serviceId: i.serviceId || undefined,
+      description: i.description,
+      hsnSac: i.hsnSac,
+      quantity: toNum(i.quantity),
+      unitRate: toNum(i.unitRate),
+    })),
+  };
+
+  const salesInvoice = await createSalesInvoice(organizationId, salesPayload);
+  return { salesInvoice, quotation: existing };
 }
 
 export async function finalizeQuotation(id, organizationId) {
