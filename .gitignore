@@ -8,3 +8,7 @@ coverage/
 prisma/*.db
 uploads/
 storage/
+
+*.err
+*.log
+
