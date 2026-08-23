@@ -3,6 +3,8 @@ import { calculateItemTax, calculateInvoiceTotals, roundTo2 } from "../lib/utils
 
 export async function getNextSalesNumber(organizationId) {
   const fy = await getActiveFinancialYear(organizationId);
+  const profile = await prisma.companyProfile.findUnique({ where: { organizationId } });
+  const prefix = profile?.salesPrefix || "TGIT";
   const seq = await prisma.documentSequence.upsert({
     where: {
       organizationId_sequenceType_financialYear: {
@@ -16,12 +18,15 @@ export async function getNextSalesNumber(organizationId) {
       organizationId,
       sequenceType: "SALES",
       financialYear: fy,
-      prefix: "TGIT",
+      prefix,
       lastNumber: 1,
     },
   });
+  if (seq.prefix !== prefix) {
+    await prisma.documentSequence.update({ where: { id: seq.id }, data: { prefix } });
+  }
   const num = String(seq.lastNumber).padStart(3, "0");
-  return `TGIT/${num}/${fy}`;
+  return `${prefix}/${num}/${fy}`;
 }
 
 export async function resolveItemTax(item, taxMode) {

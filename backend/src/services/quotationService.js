@@ -3,6 +3,8 @@ import { calculateItemTax, calculateInvoiceTotals } from "../lib/utils.js";
 
 export async function getNextQuotationNumber(organizationId) {
   const fy = await getActiveFinancialYear(organizationId);
+  const profile = await prisma.companyProfile.findUnique({ where: { organizationId } });
+  const prefix = profile?.quotationPrefix || "TGIT/QUOT";
   const seq = await prisma.documentSequence.upsert({
     where: {
       organizationId_sequenceType_financialYear: {
@@ -16,12 +18,15 @@ export async function getNextQuotationNumber(organizationId) {
       organizationId,
       sequenceType: "QUOTATION",
       financialYear: fy,
-      prefix: "TGIT/QUOT",
+      prefix,
       lastNumber: 1,
     },
   });
+  if (seq.prefix !== prefix) {
+    await prisma.documentSequence.update({ where: { id: seq.id }, data: { prefix } });
+  }
   const num = String(seq.lastNumber).padStart(3, "0");
-  return `TGIT/QUOT/${num}/${fy}`;
+  return `${prefix}/${num}/${fy}`;
 }
 
 async function resolveItemTax(item, taxMode) {

@@ -12,12 +12,14 @@ export function Settings() {
     name: "Tech Geeks IT Solution", gstin: "", udyam: "", address: "", phone: "", mobile: "",
     email: "", website: "", state: "", pin: "", bankName: "", branch: "", accountName: "",
     accountNumber: "", ifsc: "", upiId: "", invoiceFooter: "", invoiceNotes: "",
+    logoBase64: "", salesPrefix: "TGIT", quotationPrefix: "TGIT/QUOT",
   });
 
   const [termType, setTermType] = useState("SALES");
   const [terms, setTerms] = useState([]);
   const [newTerm, setNewTerm] = useState("");
   const [editingTerm, setEditingTerm] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
 
   useEffect(() => {
     fetch("/api/v1/settings/financial-year").then(r => r.json()).then(d => { setFy(d.financialYear); }).catch(() => {});
@@ -47,15 +49,26 @@ export function Settings() {
   const handleSaveProfile = async () => {
     setSaving(true); setError(null); setMessage(null);
     try {
+      const payload = { ...profile };
+      if (logoFile) payload.logoBase64 = logoFile;
       const res = await fetch("/api/v1/settings/company-profile", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profile),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "Failed");
       setProfile(data);
+      setLogoFile(null);
       setMessage("Company profile saved");
     } catch (e) { setError(e.message); } finally { setSaving(false); }
+  };
+
+  const onLogoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setLogoFile(reader.result);
+    reader.readAsDataURL(file);
   };
 
   const addTerm = async () => {
@@ -132,6 +145,16 @@ export function Settings() {
         <div className="form-card">
           <h3>Company Profile</h3>
           <div className="form-row">
+            <div className="form-group" style={{ maxWidth: 280 }}>
+              <label>Company Logo</label>
+              {(logoFile || profile.logoBase64) && (
+                <img src={logoFile || profile.logoBase64} alt="logo" style={{ maxHeight: 80, marginBottom: 8, display: "block" }} />
+              )}
+              <input type="file" accept="image/*" onChange={onLogoChange} />
+              <small style={{ color: "#718096", fontSize: "0.78rem" }}>PNG/JPG. Stored and shown on invoices.</small>
+            </div>
+          </div>
+          <div className="form-row">
             <div className="form-group"><label>Company Name</label><input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></div>
             <div className="form-group"><label>GSTIN</label><input value={profile.gstin || ""} onChange={(e) => setProfile({ ...profile, gstin: e.target.value })} /></div>
           </div>
@@ -164,6 +187,11 @@ export function Settings() {
           </div>
           <div className="form-group"><label>Invoice Footer</label><textarea rows={2} value={profile.invoiceFooter || ""} onChange={(e) => setProfile({ ...profile, invoiceFooter: e.target.value })} /></div>
           <div className="form-group"><label>Invoice Notes</label><textarea rows={2} value={profile.invoiceNotes || ""} onChange={(e) => setProfile({ ...profile, invoiceNotes: e.target.value })} /></div>
+          <h4 style={{ marginTop: 16 }}>Document Number Prefixes</h4>
+          <div className="form-row">
+            <div className="form-group"><label>Sales Invoice Prefix</label><input value={profile.salesPrefix || "TGIT"} onChange={(e) => setProfile({ ...profile, salesPrefix: e.target.value })} placeholder="TGIT" /></div>
+            <div className="form-group"><label>Quotation Prefix</label><input value={profile.quotationPrefix || "TGIT/QUOT"} onChange={(e) => setProfile({ ...profile, quotationPrefix: e.target.value })} placeholder="TGIT/QUOT" /></div>
+          </div>
           <button className="btn btn-primary" onClick={handleSaveProfile} disabled={saving}>Save Profile</button>
         </div>
       )}

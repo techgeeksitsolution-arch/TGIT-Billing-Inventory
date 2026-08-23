@@ -134,7 +134,7 @@ export function QuotationPreview() {
         <div className="invoice-paper">
           <div className="invoice-header-section">
             <div className="invoice-brand">
-              <img src="/TGIT.png" alt="TGIT" className="invoice-logo" onError={(e) => { e.target.style.display = "none"; }} />
+              <img src={profile.logoBase64 || "/TGIT.png"} alt="TGIT" className="invoice-logo" onError={(e) => { e.target.style.display = "none"; }} />
               <div>
                 <h2 className="org-name">{profile.name}</h2>
                 <p className="org-tagline">Tech Geeks IT Solution</p>

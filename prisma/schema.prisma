@@ -575,6 +575,9 @@ model CompanyProfile {
   invoiceFooter  String?
   invoiceNotes   String?
   logoStorageKey String?
+  logoBase64     String?
+  salesPrefix    String?  @default("TGIT")
+  quotationPrefix String? @default("TGIT/QUOT")
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
