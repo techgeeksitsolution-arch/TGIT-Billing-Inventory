@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import PurchaseForm from "./PurchaseForm.jsx";
 import PurchasePreview from "./PurchasePreview.jsx";
+import ImportModal from "./ImportModal.jsx";
 
 export function PurchaseList() {
   const [view, setView] = useState("list");
@@ -9,6 +10,7 @@ export function PurchaseList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [showImport, setShowImport] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -29,8 +31,13 @@ export function PurchaseList() {
     <div className="page">
       <div className="page-header">
         <h1>Purchases</h1>
-        <button className="btn btn-primary" onClick={() => { setPid(null); setView("form"); }}>New Purchase</button>
+        <div className="header-actions">
+          <button className="btn btn-outline" onClick={() => setShowImport(true)}>Import / Export</button>
+          <button className="btn btn-primary" onClick={() => { setPid(null); setView("form"); }}>New Purchase</button>
+        </div>
       </div>
+
+      {showImport && <ImportModal type="purchases" onClose={() => setShowImport(false)} onImported={() => load()} />}
       <div className="filters">
         <input className="search-input" placeholder="Search invoice / supplier" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); }}>

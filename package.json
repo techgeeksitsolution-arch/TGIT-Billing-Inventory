@@ -21,5 +21,9 @@
   "allowScripts": {
     "@prisma/client@6.19.3": true,
     "prisma@6.19.3": true
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "multer": "^2.2.0"
   }
 }

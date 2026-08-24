@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useFetch } from "../api";
+import ImportModal from "./ImportModal.jsx";
 
 const STATUS_LABELS = {
   DRAFT: { label: "Draft", color: "#f0ad4e" },
@@ -14,9 +15,10 @@ export function SalesList() {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [showImport, setShowImport] = useState(false);
 
   const query = `?page=${page}&limit=20${status ? `&status=${status}` : ""}${search ? `&search=${encodeURIComponent(search)}` : ""}`;
-  const { data, loading, error } = useFetch(`/sales${query}`);
+  const { data, loading, error, refetch } = useFetch(`/sales${query}`);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -28,10 +30,15 @@ export function SalesList() {
     <div className="page">
       <div className="page-header">
         <h1>Sales Invoices</h1>
-        <button className="btn btn-primary" onClick={() => navigate("/sales/new")}>
-          + New Invoice
-        </button>
+        <div className="header-actions">
+          <button className="btn btn-outline" onClick={() => setShowImport(true)}>Import / Export</button>
+          <button className="btn btn-primary" onClick={() => navigate("/sales/new")}>
+            + New Invoice
+          </button>
+        </div>
       </div>
+
+      {showImport && <ImportModal type="sales" onClose={() => setShowImport(false)} onImported={() => refetch && refetch()} />}
 
       <div className="filters">
         <form onSubmit={handleSearch} className="search-form">
