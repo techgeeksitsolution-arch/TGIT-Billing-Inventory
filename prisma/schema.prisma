@@ -233,7 +233,12 @@ model Supplier {
   gstNumber        String?
   address          String?
   phone            String?
+  mobile           String?
   email            String?
+  state            String?
+  pin              String?
+  contactPerson    String?
+  notes            String?
   isActive         Boolean           @default(true)
   organization     Organization      @relation(fields: [organizationId], references: [id])
   purchaseInvoices PurchaseInvoice[]
@@ -578,6 +583,7 @@ model CompanyProfile {
   logoBase64     String?
   salesPrefix    String?  @default("TGIT")
   quotationPrefix String? @default("TGIT/QUOT")
+  purchasePrefix  String?  @default("TGIT/P")
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

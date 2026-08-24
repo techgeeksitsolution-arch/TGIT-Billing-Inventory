@@ -7,9 +7,12 @@ export function Dashboard() {
   const [salesCount, setSalesCount] = useState(0);
   const [quotationCount, setQuotationCount] = useState(0);
   const [customerCount, setCustomerCount] = useState(0);
+  const [supplierCount, setSupplierCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
+  const [purchaseCount, setPurchaseCount] = useState(0);
   const [recentSales, setRecentSales] = useState([]);
   const [recentQuotations, setRecentQuotations] = useState([]);
+  const [recentPurchases, setRecentPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,7 +22,9 @@ export function Dashboard() {
       fetch("/api/v1/quotations?limit=5").then(r => r.json()),
       fetch("/api/v1/customers").then(r => r.json()),
       fetch("/api/v1/products").then(r => r.json()),
-    ]).then(([fyData, salesData, quotData, custs, prods]) => {
+      fetch("/api/v1/suppliers").then(r => r.json()),
+      fetch("/api/v1/purchases?limit=5").then(r => r.json()),
+    ]).then(([fyData, salesData, quotData, custs, prods, sups, purchData]) => {
       setFy(fyData.financialYear);
       setSalesCount(salesData.total || 0);
       setRecentSales(salesData.items || []);
@@ -27,6 +32,9 @@ export function Dashboard() {
       setRecentQuotations(quotData.items || []);
       setCustomerCount(custs.length || 0);
       setProductCount(prods.length || 0);
+      setSupplierCount(sups.length || 0);
+      setPurchaseCount(purchData.total || 0);
+      setRecentPurchases(purchData.items || []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -56,6 +64,14 @@ export function Dashboard() {
         <div className="stat-card" onClick={() => navigate("/products")} style={{ cursor: "pointer" }}>
           <div className="stat-number">{productCount}</div>
           <div className="stat-label">Products</div>
+        </div>
+        <div className="stat-card" onClick={() => navigate("/suppliers")} style={{ cursor: "pointer" }}>
+          <div className="stat-number">{supplierCount}</div>
+          <div className="stat-label">Suppliers</div>
+        </div>
+        <div className="stat-card" onClick={() => navigate("/purchases")} style={{ cursor: "pointer" }}>
+          <div className="stat-number">{purchaseCount}</div>
+          <div className="stat-label">Purchases</div>
         </div>
       </div>
 
@@ -99,6 +115,26 @@ export function Dashboard() {
             </div>
           ))}
         </div>
+
+        <div className="form-card">
+          <div className="section-header">
+            <h3>Recent Purchases</h3>
+            <button className="btn btn-sm btn-outline" onClick={() => navigate("/purchases")}>View All</button>
+          </div>
+          {recentPurchases.length === 0 && <p className="empty-hint">No purchases yet. Record your first purchase.</p>}
+          {recentPurchases.map(p => (
+            <div key={p.id} className="dash-list-item" onClick={() => navigate(`/purchases`)}>
+              <div>
+                <span className="mono">{p.internalNumber}</span>
+                <span className="dash-list-sub">{p.supplier?.name || "—"}</span>
+              </div>
+              <div className="dash-list-right">
+                <span className="amount">₹{Number(p.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                <span className={`status-dot status-${p.status.toLowerCase()}`}></span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="quick-actions">
@@ -106,7 +142,8 @@ export function Dashboard() {
         <div className="actions-row">
           <button className="btn btn-primary" onClick={() => navigate("/sales/new")}>+ New Invoice</button>
           <button className="btn btn-primary" onClick={() => navigate("/quotations/new")}>+ New Quotation</button>
-          <button className="btn btn-outline" onClick={() => navigate("/customers")}>Manage Customers</button>
+          <button className="btn btn-primary" onClick={() => navigate("/purchases")}>+ New Purchase</button>
+          <button className="btn btn-outline" onClick={() => navigate("/suppliers")}>Manage Suppliers</button>
           <button className="btn btn-outline" onClick={() => navigate("/products")}>Manage Products</button>
           <button className="btn btn-outline" onClick={() => navigate("/settings")}>Settings</button>
         </div>

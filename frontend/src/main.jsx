@@ -11,6 +11,8 @@ import { QuotationPreview } from "./components/QuotationPreview";
 import { CustomerList } from "./components/CustomerList";
 import { ProductList } from "./components/ProductList";
 import { ServiceList } from "./components/ServiceList";
+import { SupplierList } from "./components/SupplierList";
+import { PurchaseList } from "./components/PurchaseList";
 import { Settings } from "./components/Settings";
 
 function App() {
@@ -43,6 +45,13 @@ function App() {
             <NavLink to="/services" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
               <span className="nav-icon">&#9881;</span> Services
             </NavLink>
+            <div className="nav-divider">Purchase</div>
+            <NavLink to="/suppliers" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span className="nav-icon">&#128101;</span> Suppliers
+            </NavLink>
+            <NavLink to="/purchases" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span className="nav-icon">&#128196;</span> Purchases
+            </NavLink>
             <div className="nav-divider">System</div>
             <NavLink to="/settings" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
               <span className="nav-icon">&#9881;</span> Settings
@@ -64,6 +73,8 @@ function App() {
             <Route path="/customers" element={<CustomerList />} />
             <Route path="/products" element={<ProductList />} />
             <Route path="/services" element={<ServiceList />} />
+            <Route path="/suppliers" element={<SupplierList />} />
+            <Route path="/purchases" element={<PurchaseList />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
