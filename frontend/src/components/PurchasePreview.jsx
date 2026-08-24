@@ -1,8 +1,37 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
+
+function numberToWords(num) {
+  if (num === 0) return "Zero";
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  function cg(n) {
+    if (n === 0) return "";
+    if (n < 20) return ones[n];
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+    return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " and " + cg(n % 100) : "");
+  }
+  const wp = Math.floor(num);
+  const dp = Math.round((num - wp) * 100);
+  let r = "";
+  const cr = Math.floor(wp / 10000000);
+  const la = Math.floor((wp % 10000000) / 100000);
+  const th = Math.floor((wp % 100000) / 1000);
+  const re = wp % 1000;
+  if (cr) r += cg(cr) + " Crore ";
+  if (la) r += cg(la) + " Lakh ";
+  if (th) r += cg(th) + " Thousand ";
+  if (re) r += cg(re);
+  r = r.trim() + " Rupees";
+  if (dp) r += " and " + cg(dp) + " Paise";
+  return r + " Only";
+}
+
+const STATUS_LABELS = { DRAFT: "Draft", CONFIRMED: "Finalized", CANCELLED: "Cancelled" };
 
 export default function PurchasePreview({ purchaseId, onBack, onEdit, onChanged }) {
   const [purchase, setPurchase] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState({ name: "Tech Geeks IT Solution" });
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState(null);
 
@@ -15,98 +44,147 @@ export default function PurchasePreview({ purchaseId, onBack, onEdit, onChanged 
   useEffect(() => { load(); }, [purchaseId]);
 
   const doFinalize = async () => {
+    if (!confirm("Finalize this purchase? Stock will be added.")) return;
     setAction("finalizing");
     const res = await fetch(`/api/v1/purchases/${purchaseId}/finalize`, { method: "POST" });
     if (res.ok) { await load(); onChanged && onChanged(); }
     setAction(null);
   };
   const doCancel = async () => {
+    if (!confirm("Cancel this finalized purchase? Stock will be reversed.")) return;
     setAction("cancelling");
     const res = await fetch(`/api/v1/purchases/${purchaseId}/cancel`, { method: "POST" });
     if (res.ok) { await load(); onChanged && onChanged(); }
     setAction(null);
   };
 
-  if (loading || !purchase) return <p>Loading…</p>;
+  if (loading || !purchase) return <div className="loading">Loading…</div>;
 
-  const fmt = (n) => Number(n).toFixed(2);
-  const statusLabel = { DRAFT: "Draft", CONFIRMED: "Finalized", CANCELLED: "Cancelled" }[purchase.status] || purchase.status;
+  const inv = purchase;
+  const isGST = inv.taxMode === "INTRA_STATE_GST" || inv.taxMode === "INTER_STATE_GST";
 
   return (
     <div className="page">
-      <div className="page-header">
-        <div>
-          <button className="btn btn-sm" onClick={onBack}>← Back</button>
-          <span className="doc-status" style={{ marginLeft: 12 }}>{statusLabel}</span>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-sm" onClick={() => window.print()}>Print</button>
-          {purchase.status === "DRAFT" && <button className="btn btn-sm" onClick={() => onEdit && onEdit(purchase.id)}>Edit</button>}
-          {purchase.status === "DRAFT" && <button className="btn btn-primary btn-sm" onClick={doFinalize} disabled={action}>Finalize</button>}
-          {purchase.status === "CONFIRMED" && <button className="btn btn-danger btn-sm" onClick={doCancel} disabled={action}>Cancel</button>}
+      <div className="page-header no-print">
+        <h1>Purchase {inv.internalNumber}</h1>
+        <div className="header-actions">
+          {inv.status === "DRAFT" && (
+            <>
+              <button className="btn btn-primary" onClick={doFinalize} disabled={action}>{action ? "Finalizing..." : "Finalize & Add Stock"}</button>
+              <button className="btn btn-outline" onClick={() => onEdit && onEdit(inv.id)}>Edit</button>
+            </>
+          )}
+          {inv.status === "CONFIRMED" && (
+            <button className="btn btn-danger" onClick={doCancel} disabled={action}>{action ? "Cancelling..." : "Cancel Purchase"}</button>
+          )}
+          <button className="btn btn-outline" onClick={() => window.print()}>Print / PDF</button>
+          <button className="btn btn-outline" onClick={onBack}>Back to List</button>
         </div>
       </div>
 
-      <div className="invoice-preview" id="purchase-preview">
-        <div className="invoice-header">
-          <div>
-            {profile?.logoBase64 && <img src={profile.logoBase64} alt="logo" className="invoice-logo" onError={(e) => { e.target.style.display = "none"; }} />}
-            <div className="company-name">{profile?.name || "Company"}</div>
-            {profile?.address && <div className="company-meta">{profile.address}</div>}
-            {profile?.gstin && <div className="company-meta">GSTIN: {profile.gstin}</div>}
-            {profile?.udyam && <div className="company-meta">UDYAM: {profile.udyam}</div>}
+      <div className="invoice-print-area" id="purchase-print">
+        <div className="invoice-paper">
+          <div className="invoice-header-section">
+            <div className="invoice-brand">
+              <img src={profile.logoBase64 || "/TGIT.png"} alt="TGIT" className="invoice-logo" onError={(e) => { e.target.style.display = "none"; }} />
+              <div>
+                <h2 className="org-name">{profile.name}</h2>
+                <p className="org-tagline">Tech Geeks IT Solution</p>
+              </div>
+            </div>
+            <div className="invoice-title-block">
+              <h1 className="invoice-title">PURCHASE INVOICE</h1>
+              <span className="status-badge-inline" style={{ backgroundColor: inv.status === "CONFIRMED" ? "#5cb85c" : inv.status === "CANCELLED" ? "#d9534f" : "#f0ad4e" }}>
+                {STATUS_LABELS[inv.status]}
+              </span>
+            </div>
           </div>
-          <div className="invoice-title">PURCHASE / BILL</div>
-        </div>
 
-        <div className="invoice-meta">
-          <div><strong>Internal No:</strong> {purchase.internalNumber}</div>
-          <div><strong>Supplier Invoice:</strong> {purchase.supplierInvoiceNo || "—"}</div>
-          <div><strong>Date:</strong> {new Date(purchase.invoiceDate).toLocaleDateString()}</div>
-          <div><strong>Tax Mode:</strong> {purchase.taxMode}</div>
-        </div>
-
-        {purchase.supplier && (
-          <div className="party-box">
-            <div className="party-label">Supplier</div>
-            <div className="party-name">{purchase.supplier.name}</div>
-            {purchase.supplier.gstNumber && <div>GSTIN: {purchase.supplier.gstNumber}</div>}
-            {purchase.supplier.address && <div>{purchase.supplier.address}</div>}
-            {purchase.supplier.mobile && <div>Phone: {purchase.supplier.mobile}</div>}
+          <div className="invoice-meta-grid">
+            <div className="meta-group">
+              <div className="meta-row"><span className="meta-label">Invoice No:</span><span className="meta-value mono">{inv.internalNumber}</span></div>
+              <div className="meta-row"><span className="meta-label">Date:</span><span className="meta-value">{new Date(inv.invoiceDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>
+              <div className="meta-row"><span className="meta-label">Tax Mode:</span><span className="meta-value">{inv.taxMode.replace(/_/g, " ")}</span></div>
+              {inv.placeOfSupply && <div className="meta-row"><span className="meta-label">Place of Supply:</span><span className="meta-value">{inv.placeOfSupply}</span></div>}
+              {inv.supplierInvoiceNo && <div className="meta-row"><span className="meta-label">Supplier Inv No.:</span><span className="meta-value mono">{inv.supplierInvoiceNo}</span></div>}
+            </div>
+            <div className="meta-group">
+              <div className="meta-row"><span className="meta-label">Bill From:</span><span className="meta-value">{inv.supplier?.name || "—"}</span></div>
+              {inv.supplier?.address && <div className="meta-row"><span className="meta-label">Address:</span><span className="meta-value">{inv.supplier.address}</span></div>}
+              {inv.supplier?.phone && <div className="meta-row"><span className="meta-label">Phone:</span><span className="meta-value">{inv.supplier.phone}</span></div>}
+              {inv.supplier?.gstNumber && <div className="meta-row"><span className="meta-label">GSTIN:</span><span className="meta-value mono">{inv.supplier.gstNumber}</span></div>}
+            </div>
           </div>
-        )}
 
-        <table className="invoice-table">
-          <thead>
-            <tr><th>#</th><th>Item</th><th>HSN</th><th>Qty</th><th>Unit Price</th><th>Taxable</th><th>Tax</th><th>Total</th></tr>
-          </thead>
-          <tbody>
-            {purchase.items.map((it, i) => (
-              <tr key={it.id}>
-                <td>{i + 1}</td>
-                <td>{it.description}</td>
-                <td>{it.hsnCode || "—"}</td>
-                <td>{Number(it.quantity)}</td>
-                <td>{fmt(it.unitPrice)}</td>
-                <td>{fmt(it.taxableValue)}</td>
-                <td>{fmt(Number(it.cgstAmount) + Number(it.sgstAmount) + Number(it.igstAmount))}</td>
-                <td>{fmt(it.totalAmount)}</td>
+          <table className="invoice-items-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Description</th>
+                <th>HSN/SAC</th>
+                <th className="r">Qty</th>
+                <th className="r">Rate (₹)</th>
+                <th className="r">Taxable (₹)</th>
+                {isGST && inv.taxMode === "INTRA_STATE_GST" && <>
+                  <th className="r">CGST</th>
+                  <th className="r">SGST</th>
+                </>}
+                {isGST && inv.taxMode === "INTER_STATE_GST" && <th className="r">IGST</th>}
+                <th className="r">Amount (₹)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {inv.items?.map((item, idx) => (
+                <tr key={item.id}>
+                  <td>{idx + 1}</td>
+                  <td>{item.description}</td>
+                  <td className="mono">{item.hsnCode || "-"}</td>
+                  <td className="r">{Number(item.quantity)}</td>
+                  <td className="r">{Number(item.unitPrice).toFixed(2)}</td>
+                  <td className="r">{Number(item.taxableValue).toFixed(2)}</td>
+                  {isGST && inv.taxMode === "INTRA_STATE_GST" && <>
+                    <td className="r">{Number(item.cgstAmount).toFixed(2)}<br /><small>{Number(item.cgstRate)}%</small></td>
+                    <td className="r">{Number(item.sgstAmount).toFixed(2)}<br /><small>{Number(item.sgstRate)}%</small></td>
+                  </>}
+                  {isGST && inv.taxMode === "INTER_STATE_GST" && (
+                    <td className="r">{Number(item.igstAmount).toFixed(2)}<br /><small>{Number(item.igstRate)}%</small></td>
+                  )}
+                  <td className="r bold">{Number(item.totalAmount).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-        <div className="invoice-totals">
-          <div className="totals-row"><span>Taxable Total</span><span>{fmt(purchase.taxableTotal)}</span></div>
-          {Number(purchase.cgstTotal) > 0 && <div className="totals-row"><span>CGST</span><span>{fmt(purchase.cgstTotal)}</span></div>}
-          {Number(purchase.sgstTotal) > 0 && <div className="totals-row"><span>SGST</span><span>{fmt(purchase.sgstTotal)}</span></div>}
-          {Number(purchase.igstTotal) > 0 && <div className="totals-row"><span>IGST</span><span>{fmt(purchase.igstTotal)}</span></div>}
-          <div className="totals-row totals-grand"><span>Grand Total</span><span>{fmt(purchase.grandTotal)}</span></div>
-        </div>
+          <div className="invoice-footer-section">
+            <div className="amount-words">
+              <strong>Amount in Words:</strong> {numberToWords(Number(inv.grandTotal))}
+            </div>
+            <div className="totals-summary">
+              <div className="total-row"><span>Taxable Total</span><span>₹{Number(inv.taxableTotal).toFixed(2)}</span></div>
+              {isGST && inv.taxMode === "INTRA_STATE_GST" && <>
+                <div className="total-row"><span>CGST</span><span>₹{Number(inv.cgstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>SGST</span><span>₹{Number(inv.sgstTotal).toFixed(2)}</span></div>
+              </>}
+              {isGST && inv.taxMode === "INTER_STATE_GST" && (
+                <div className="total-row"><span>IGST</span><span>₹{Number(inv.igstTotal).toFixed(2)}</span></div>
+              )}
+              <div className="total-row"><span>Total Tax</span><span>₹{Number(inv.totalTax).toFixed(2)}</span></div>
+              {Number(inv.roundOff) !== 0 && <div className="total-row"><span>Round Off</span><span>₹{Number(inv.roundOff).toFixed(2)}</span></div>}
+              <div className="total-row grand"><span>Grand Total</span><span>₹{Number(inv.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+            </div>
+          </div>
 
-        <div className="invoice-footer" style={{ marginTop: 24 }}>
-          <div>This is a computer-generated purchase record.</div>
-          {profile?.invoiceFooter && <div>{profile.invoiceFooter}</div>}
+          <div className="invoice-bottom">
+            <div className="bank-details">
+              <h4>Bank Details</h4>
+              <p>Bank: [Your Bank Name]<br />A/C No: [Your Account Number]<br />IFSC: [Your IFSC Code]<br />Branch: [Your Branch]</p>
+            </div>
+            <div className="authorized-signatory">
+              <p>For {profile.name}</p>
+              <div className="signature-line"></div>
+              <p>Authorized Signatory</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

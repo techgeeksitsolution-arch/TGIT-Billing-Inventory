@@ -7,11 +7,11 @@ function computeItem(item, taxMode, taxRatePercent) {
   const unitPrice = Number(item.unitPrice) || 0;
   const taxableValue = roundTo2(quantity * unitPrice);
   let cgstRate = 0, cgstAmount = 0, sgstRate = 0, sgstAmount = 0, igstRate = 0, igstAmount = 0;
-  if (taxMode === "GST") {
+  if (taxMode === "INTRA_STATE_GST") {
     cgstRate = taxRatePercent / 2; sgstRate = taxRatePercent / 2;
     cgstAmount = roundTo2((taxableValue * taxRatePercent) / 200);
     sgstAmount = cgstAmount;
-  } else if (taxMode === "IGST") {
+  } else if (taxMode === "INTER_STATE_GST") {
     igstRate = taxRatePercent;
     igstAmount = roundTo2((taxableValue * taxRatePercent) / 100);
   }
@@ -111,8 +111,9 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
           <div className="form-group"><label>Tax Mode</label>
             <select value={taxMode} onChange={(e) => setTaxMode(e.target.value)}>
               <option value="NON_GST">Non-GST</option>
-              <option value="GST">GST (Intra-state)</option>
-              <option value="IGST">IGST (Inter-state)</option>
+              <option value="INTRA_STATE_GST">Intra-State GST (CGST + SGST)</option>
+              <option value="INTER_STATE_GST">Inter-State GST (IGST)</option>
+              <option value="EXEMPT">Exempt</option>
             </select>
           </div>
         </div>
