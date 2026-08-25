@@ -94,20 +94,26 @@ export function SalesForm() {
   const updateItem = (index, field, value) => {
     const items = [...form.items];
     items[index] = { ...items[index], [field]: value };
-    if (field === "productId" && value) {
-      const product = products.find(p => p.id === value);
-      if (product) {
-        items[index].description = product.name;
-        items[index].hsnSac = product.hsnCode || "";
-        items[index].unitRate = Number(product.sellingPrice);
+    if (field === "productId") {
+      items[index].serviceId = "";
+      if (value) {
+        const product = products.find(p => p.id === value);
+        if (product) {
+          items[index].description = product.name;
+          items[index].hsnSac = product.hsnCode || "";
+          items[index].unitRate = Number(product.sellingPrice);
+        }
       }
     }
-    if (field === "serviceId" && value) {
-      const service = services.find(s => s.id === value);
-      if (service) {
-        items[index].description = service.name;
-        items[index].hsnSac = service.sacCode || "";
-        items[index].unitRate = Number(service.defaultRate);
+    if (field === "serviceId") {
+      items[index].productId = "";
+      if (value) {
+        const service = services.find(s => s.id === value);
+        if (service) {
+          items[index].description = service.name;
+          items[index].hsnSac = service.sacCode || "";
+          items[index].unitRate = Number(service.defaultRate);
+        }
       }
     }
     setForm({ ...form, items });
@@ -257,48 +263,47 @@ export function SalesForm() {
         <h3>Line Items</h3>
         <div className="items-table-container">
           <table className="items-table">
-            <thead>
-              <tr>
-                <th className="col-idx">#</th>
-                <th className="col-type">Type</th>
-                <th className="col-product">Product / Service</th>
-                <th className="col-desc">Description</th>
-                <th className="col-hsn">HSN/SAC</th>
-                <th className="col-qty">Qty</th>
-                <th className="col-rate">Rate (₹)</th>
-                <th className="col-taxable">Taxable (₹)</th>
-                <th className="col-tax">GST (₹)</th>
-                <th className="col-total">Total (₹)</th>
-                <th className="col-action"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {calculatedItems.map((item, idx) => (
-                <tr key={idx}>
-                  <td className="col-idx">{idx + 1}</td>
-                  <td className="col-type">
-                    <select value={item.productId || item.serviceId || ""} onChange={(e) => {
-                      const val = e.target.value;
-                      const isProduct = products.some(p => p.id === val);
-                      updateItem(idx, "productId", isProduct ? val : "");
-                      if (!isProduct) updateItem(idx, "serviceId", val);
-                    }}>
-                      <option value="">-- Select --</option>
-                      {products.length > 0 && <optgroup label="Products">{products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {Number(p.currentStock)})</option>)}</optgroup>}
-                      {services.length > 0 && <optgroup label="Services">{services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>}
-                    </select>
-                  </td>
-                  <td className="col-desc"><input type="text" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} /></td>
-                  <td className="col-hsn"><input type="text" value={item.hsnSac} onChange={(e) => updateItem(idx, "hsnSac", e.target.value)} style={{ width: 80 }} /></td>
-                  <td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} style={{ width: 80 }} /></td>
-                  <td className="col-rate"><input type="number" min="0" step="0.01" value={item.unitRate} onChange={(e) => updateItem(idx, "unitRate", e.target.value)} style={{ width: 100 }} /></td>
-                  <td className="col-taxable amount">{item.taxableValue.toFixed(2)}</td>
-                  <td className="col-tax amount">{(item.cgstAmount + item.sgstAmount + item.igstAmount).toFixed(2)}</td>
-                  <td className="col-total amount">{item.totalAmount.toFixed(2)}</td>
-                  <td className="col-action"><button className="btn btn-sm btn-danger" onClick={() => removeItem(idx)} disabled={calculatedItems.length <= 1}>x</button></td>
+              <thead>
+                <tr>
+                  <th className="col-idx">#</th>
+                  <th className="col-item">Product / Service</th>
+                  <th className="col-desc">Description</th>
+                  <th className="col-hsn">HSN/SAC</th>
+                  <th className="col-rate">Price (₹)</th>
+                  <th className="col-qty">Qty</th>
+                  <th className="col-taxable">Taxable (₹)</th>
+                  <th className="col-tax">GST (₹)</th>
+                  <th className="col-total">Total (₹)</th>
+                  <th className="col-action"></th>
                 </tr>
-              ))}
-            </tbody>
+              </thead>
+              <tbody>
+                {calculatedItems.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="col-idx">{idx + 1}</td>
+                    <td className="col-item">
+                      <select value={item.productId || item.serviceId || ""} onChange={(e) => {
+                        const val = e.target.value;
+                        const isProduct = products.some(p => p.id === val);
+                        updateItem(idx, "productId", isProduct ? val : "");
+                        if (!isProduct) updateItem(idx, "serviceId", val);
+                      }}>
+                        <option value="">-- Select --</option>
+                        {products.length > 0 && <optgroup label="Products">{products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {Number(p.currentStock)})</option>)}</optgroup>}
+                        {services.length > 0 && <optgroup label="Services">{services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>}
+                      </select>
+                    </td>
+                    <td className="col-desc"><input type="text" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} placeholder="Item description" /></td>
+                    <td className="col-hsn"><input type="text" value={item.hsnSac} onChange={(e) => updateItem(idx, "hsnSac", e.target.value)} style={{ width: 80 }} /></td>
+                    <td className="col-rate"><input type="number" min="0" step="0.01" value={item.unitRate} onChange={(e) => updateItem(idx, "unitRate", e.target.value)} style={{ width: 100 }} placeholder="0.00" /></td>
+                    <td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} style={{ width: 80 }} /></td>
+                    <td className="col-taxable amount">{item.taxableValue.toFixed(2)}</td>
+                    <td className="col-tax amount">{(item.cgstAmount + item.sgstAmount + item.igstAmount).toFixed(2)}</td>
+                    <td className="col-total amount">{item.totalAmount.toFixed(2)}</td>
+                    <td className="col-action"><button className="btn btn-sm btn-danger" onClick={() => removeItem(idx)} disabled={calculatedItems.length <= 1}>x</button></td>
+                  </tr>
+                ))}
+              </tbody>
           </table>
         </div>
         <button className="btn btn-outline" onClick={addItem}>+ Add Item</button>
