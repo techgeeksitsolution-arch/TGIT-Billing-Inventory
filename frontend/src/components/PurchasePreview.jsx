@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
 
 function numberToWords(num) {
   if (num === 0) return "Zero";
@@ -162,11 +163,11 @@ export default function PurchasePreview({ purchaseId, onBack, onEdit, onChanged 
             <div className="totals-summary">
               <div className="total-row"><span>Taxable Total</span><span>₹{Number(inv.taxableTotal).toFixed(2)}</span></div>
               {isGST && inv.taxMode === "INTRA_STATE_GST" && <>
-                <div className="total-row"><span>CGST</span><span>₹{Number(inv.cgstTotal).toFixed(2)}</span></div>
-                <div className="total-row"><span>SGST</span><span>₹{Number(inv.sgstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>CGST ({fmtPercent(taxPercent(Number(inv.cgstTotal), Number(inv.taxableTotal)))}%)</span><span>₹{Number(inv.cgstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>SGST ({fmtPercent(taxPercent(Number(inv.sgstTotal), Number(inv.taxableTotal)))}%)</span><span>₹{Number(inv.sgstTotal).toFixed(2)}</span></div>
               </>}
               {isGST && inv.taxMode === "INTER_STATE_GST" && (
-                <div className="total-row"><span>IGST</span><span>₹{Number(inv.igstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>IGST ({fmtPercent(taxPercent(Number(inv.igstTotal), Number(inv.taxableTotal)))}%)</span><span>₹{Number(inv.igstTotal).toFixed(2)}</span></div>
               )}
               <div className="total-row"><span>Total Tax</span><span>₹{Number(inv.totalTax).toFixed(2)}</span></div>
               {Number(inv.roundOff) !== 0 && <div className="total-row"><span>Round Off</span><span>₹{Number(inv.roundOff).toFixed(2)}</span></div>}

@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiPost, apiPut } from "../api";
-import { applyRoundOff, ROUND_OFF_MODES } from "../lib/invoiceTotals.js";
+import { applyRoundOff, ROUND_OFF_MODES, taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
 
-const EMPTY_ITEM = { productId: "", serviceId: "", description: "", hsnSac: "", quantity: 1, unitRate: 0 };
+const EMPTY_ITEM = { productId: "", serviceId: "", description: "", hsnSac: "", quantity: 1, unitRate: 0, taxRate: "" };
 const TAX_MODES = [
   { value: "NON_GST", label: "Non-GST" },
   { value: "INTRA_STATE_GST", label: "Intra-State GST (CGST + SGST)" },
@@ -38,6 +38,7 @@ export function SalesForm() {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
+  const [taxRates, setTaxRates] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -59,6 +60,7 @@ export function SalesForm() {
     fetch("/api/v1/customers").then(r => r.json()).then(setCustomers).catch(() => {});
     fetch("/api/v1/products").then(r => r.json()).then(setProducts).catch(() => {});
     fetch("/api/v1/services").then(r => r.json()).then(setServices).catch(() => {});
+    fetch("/api/v1/tax-rates").then(r => r.json()).then(setTaxRates).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -84,6 +86,7 @@ export function SalesForm() {
               hsnSac: i.hsnSac || "",
               quantity: Number(i.quantity),
               unitRate: Number(i.unitRate),
+              taxRate: Number(i.cgstRate) * 2 || Number(i.igstRate) || "",
             })) : [{ ...EMPTY_ITEM }],
           });
         })
@@ -102,6 +105,7 @@ export function SalesForm() {
           items[index].description = product.name;
           items[index].hsnSac = product.hsnCode || "";
           items[index].unitRate = Number(product.sellingPrice);
+          items[index].taxRate = product.taxRate ? Number(product.taxRate.rate) : "";
         }
       }
     }
@@ -113,6 +117,7 @@ export function SalesForm() {
           items[index].description = service.name;
           items[index].hsnSac = service.sacCode || "";
           items[index].unitRate = Number(service.defaultRate);
+          items[index].taxRate = service.taxRate ? Number(service.taxRate.rate) : "";
         }
       }
     }
@@ -137,10 +142,10 @@ export function SalesForm() {
     return 0;
   };
 
-  const calculatedItems = form.items.map(item => ({
-    ...item,
-    ...calcItem(item, form.taxMode, getItemTaxRate(item)),
-  }));
+  const calculatedItems = form.items.map(item => {
+    const tr = item.taxRate !== "" && item.taxRate != null ? Number(item.taxRate) : getItemTaxRate(item);
+    return { ...item, ...calcItem(item, form.taxMode, tr) };
+  });
 
   const totals = calculatedItems.reduce(
     (acc, item) => ({
@@ -179,6 +184,7 @@ export function SalesForm() {
           hsnSac: i.hsnSac,
           quantity: Number(i.quantity),
           unitRate: Number(i.unitRate),
+          taxRate: i.taxRate === "" || i.taxRate == null ? undefined : Number(i.taxRate),
         })),
       };
       let result;
@@ -268,9 +274,10 @@ export function SalesForm() {
                   <th className="col-idx">#</th>
                   <th className="col-item">Product / Service</th>
                   <th className="col-desc">Description</th>
-                  <th className="col-hsn">HSN/SAC</th>
-                  <th className="col-rate">Price (₹)</th>
-                  <th className="col-qty">Qty</th>
+                   <th className="col-hsn">HSN/SAC</th>
+                   <th className="col-gst">GST %</th>
+                   <th className="col-rate">Price (₹)</th>
+                   <th className="col-qty">Qty</th>
                   <th className="col-taxable">Taxable (₹)</th>
                   <th className="col-tax">GST (₹)</th>
                   <th className="col-total">Total (₹)</th>
@@ -295,6 +302,12 @@ export function SalesForm() {
                     </td>
                     <td className="col-desc"><input type="text" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} placeholder="Item description" /></td>
                     <td className="col-hsn"><input type="text" value={item.hsnSac} onChange={(e) => updateItem(idx, "hsnSac", e.target.value)} style={{ width: 80 }} /></td>
+                    <td className="col-gst">
+                      <select value={item.taxRate === "" || item.taxRate == null ? "" : String(item.taxRate)} onChange={(e) => updateItem(idx, "taxRate", e.target.value === "" ? "" : Number(e.target.value))} style={{ width: 80 }}>
+                        <option value="">Auto</option>
+                        {taxRates.map(t => <option key={t.id} value={String(t.rate)}>{t.rate}%</option>)}
+                      </select>
+                    </td>
                     <td className="col-rate"><input type="number" min="0" step="0.01" value={item.unitRate} onChange={(e) => updateItem(idx, "unitRate", e.target.value)} style={{ width: 100 }} placeholder="0.00" /></td>
                     <td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} style={{ width: 80 }} /></td>
                     <td className="col-taxable amount">{item.taxableValue.toFixed(2)}</td>
@@ -333,11 +346,11 @@ export function SalesForm() {
         <div className="totals-grid">
           <div className="totals-row"><span>Taxable Total:</span><span>₹{totals.taxableTotal.toFixed(2)}</span></div>
           {form.taxMode === "INTRA_STATE_GST" && <>
-            <div className="totals-row"><span>CGST:</span><span>₹{totals.cgstTotal.toFixed(2)}</span></div>
-            <div className="totals-row"><span>SGST:</span><span>₹{totals.sgstTotal.toFixed(2)}</span></div>
+            <div className="totals-row"><span>CGST ({fmtPercent(taxPercent(totals.cgstTotal, totals.taxableTotal))}%):</span><span>₹{totals.cgstTotal.toFixed(2)}</span></div>
+            <div className="totals-row"><span>SGST ({fmtPercent(taxPercent(totals.sgstTotal, totals.taxableTotal))}%):</span><span>₹{totals.sgstTotal.toFixed(2)}</span></div>
           </>}
           {form.taxMode === "INTER_STATE_GST" && (
-            <div className="totals-row"><span>IGST:</span><span>₹{totals.igstTotal.toFixed(2)}</span></div>
+            <div className="totals-row"><span>IGST ({fmtPercent(taxPercent(totals.igstTotal, totals.taxableTotal))}%):</span><span>₹{totals.igstTotal.toFixed(2)}</span></div>
           )}
           <div className="totals-row"><span>Total Tax:</span><span>₹{totalTax.toFixed(2)}</span></div>
           <div className="totals-row"><span>Discount:</span><span>₹{discount.toFixed(2)}</span></div>

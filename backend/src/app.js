@@ -11,6 +11,7 @@ import { suppliersRouter } from "./routes/suppliers.js";
 import { purchasesRouter } from "./routes/purchases.js";
 import { settingsRouter } from "./routes/settings.js";
 import { nonGstRouter } from "./routes/nonGst.js";
+import { taxRatesRouter } from "./routes/taxRates.js";
 import { notFound, errorHandler } from "./middleware/errors.js";
 
 export const app = express();
@@ -30,5 +31,6 @@ app.use("/api/v1/suppliers", suppliersRouter);
 app.use("/api/v1/purchases", purchasesRouter);
 app.use("/api/v1/settings", settingsRouter);
 app.use("/api/v1/nongst", nonGstRouter);
+app.use("/api/v1/tax-rates", taxRatesRouter);
 app.use(notFound);
 app.use(errorHandler);

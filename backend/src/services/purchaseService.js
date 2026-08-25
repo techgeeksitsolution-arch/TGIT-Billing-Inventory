@@ -20,7 +20,7 @@ export async function getNextPurchaseNumber(organizationId) {
 }
 
 async function resolveItem(input, taxMode) {
-  let taxRatePercent = 0;
+  let taxRatePercent = input.taxRate != null ? Number(input.taxRate) : 0;
   let hsnCode = input.hsnCode || "";
   let description = input.description || "";
   let productId = input.productId || null;
@@ -30,7 +30,7 @@ async function resolveItem(input, taxMode) {
     if (!product) throw Object.assign(new Error("Product not found"), { statusCode: 400 });
     if (!description) description = product.name;
     if (!hsnCode) hsnCode = product.hsnCode || "";
-    if (product.taxRateId) {
+    if (taxRatePercent === 0 && product.taxRateId) {
       const tr = await prisma.taxRate.findUnique({ where: { id: product.taxRateId } });
       if (tr) taxRatePercent = Number(tr.rate);
     }

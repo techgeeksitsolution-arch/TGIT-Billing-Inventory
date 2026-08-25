@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
 
 const roundTo2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -22,6 +23,7 @@ function computeItem(item, taxMode, taxRatePercent) {
 export default function PurchaseForm({ purchaseId, onSaved }) {
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [taxRates, setTaxRates] = useState([]);
   const [supplierId, setSupplierId] = useState("");
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
@@ -34,6 +36,7 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
   useEffect(() => {
     fetch("/api/v1/suppliers").then((r) => r.json()).then(setSuppliers);
     fetch("/api/v1/products").then((r) => r.json()).then(setProducts);
+    fetch("/api/v1/tax-rates").then((r) => r.json()).then(setTaxRates).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -81,7 +84,7 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
     setSaving(true); setError(null);
     const payload = {
       supplierId, supplierInvoiceNo, invoiceDate, taxMode,
-      items: items.map((it) => ({ productId: it.productId || null, description: it.description, hsnCode: it.hsnCode, quantity: Number(it.quantity), unitPrice: Number(it.unitPrice) })),
+      items: items.map((it) => ({ productId: it.productId || null, description: it.description, hsnCode: it.hsnCode, quantity: Number(it.quantity), unitPrice: Number(it.unitPrice), taxRate: it.taxRatePercent ? Number(it.taxRatePercent) : undefined })),
     };
     try {
       const method = purchaseId ? "PUT" : "POST";
@@ -133,7 +136,12 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
                 <td><input style={{ width: 90 }} value={it.hsnCode} onChange={(e) => updateItem(idx, "hsnCode", e.target.value)} /></td>
                 <td><input style={{ width: 70 }} type="number" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} /></td>
                 <td><input style={{ width: 100 }} type="number" value={it.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} /></td>
-                <td><input style={{ width: 70 }} type="number" value={it.taxRatePercent} onChange={(e) => updateItem(idx, "taxRatePercent", Number(e.target.value))} /></td>
+                 <td>
+                   <select style={{ width: 80 }} value={it.taxRatePercent ? String(it.taxRatePercent) : ""} onChange={(e) => updateItem(idx, "taxRatePercent", e.target.value === "" ? 0 : Number(e.target.value))}>
+                     <option value="">Auto</option>
+                     {taxRates.map((t) => <option key={t.id} value={String(t.rate)}>{t.rate}%</option>)}
+                   </select>
+                 </td>
                 <td>{computed[idx].totalAmount.toFixed(2)}</td>
                 <td><button className="btn btn-sm" onClick={() => removeItem(idx)} disabled={items.length === 1}>✕</button></td>
               </tr>
@@ -145,11 +153,11 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
 
       <div className="form-card" style={{ maxWidth: 360 }}>
         <div className="totals-row"><span>Taxable</span><span>{taxableTotal.toFixed(2)}</span></div>
-        {taxMode === "GST" && <>
-          <div className="totals-row"><span>CGST</span><span>{cgstTotal.toFixed(2)}</span></div>
-          <div className="totals-row"><span>SGST</span><span>{sgstTotal.toFixed(2)}</span></div>
+        {taxMode === "INTRA_STATE_GST" && <>
+          <div className="totals-row"><span>CGST ({fmtPercent(taxPercent(cgstTotal, taxableTotal))}%)</span><span>{cgstTotal.toFixed(2)}</span></div>
+          <div className="totals-row"><span>SGST ({fmtPercent(taxPercent(sgstTotal, taxableTotal))}%)</span><span>{sgstTotal.toFixed(2)}</span></div>
         </>}
-        {taxMode === "IGST" && <div className="totals-row"><span>IGST</span><span>{igstTotal.toFixed(2)}</span></div>}
+        {taxMode === "INTER_STATE_GST" && <div className="totals-row"><span>IGST ({fmtPercent(taxPercent(igstTotal, taxableTotal))}%)</span><span>{igstTotal.toFixed(2)}</span></div>}
         <div className="totals-row totals-grand"><span>Grand Total</span><span>{grandTotal.toFixed(2)}</span></div>
       </div>
 

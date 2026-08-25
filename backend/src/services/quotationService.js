@@ -152,30 +152,30 @@ export async function updateQuotation(id, organizationId, data) {
   return getQuotation(id, organizationId);
 }
 
-export async function convertQuotationToSales(id, organizationId) {
+export async function convertQuotationToSales(id, organizationId, { invoiceDate, invoiceNumberMode, invoiceNumber } = {}) {
   const existing = await prisma.quotation.findFirst({
     where: { id, organizationId },
     include: { items: { include: { product: true, service: true } } },
   });
   if (!existing) throw Object.assign(new Error("Quotation not found"), { statusCode: 404 });
   if (existing.status === "CANCELLED") throw Object.assign(new Error("Cancelled quotation cannot be converted"), { statusCode: 400 });
-
-  const already = await prisma.salesInvoice.findFirst({
-    where: { organizationId, quotationReference: existing.quotationNumber },
-  });
-  if (already) throw Object.assign(new Error("This quotation has already been converted"), { statusCode: 400 });
+  if (existing.convertedInvoiceId) throw Object.assign(new Error("This quotation has already been converted"), { statusCode: 400 });
 
   const { createSalesInvoice } = await import("./salesService.js");
 
   const toNum = (v) => (v && typeof v === "object" && typeof v.toNumber === "function" ? v.toNumber() : Number(v));
 
+  const effectiveDate = invoiceDate || (existing.quotationDate ? existing.quotationDate.toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
+
   const salesPayload = {
     customerId: existing.customerId || undefined,
-    invoiceDate: new Date().toISOString().split("T")[0],
+    invoiceDate: effectiveDate,
     taxMode: existing.taxMode,
     placeOfSupply: existing.placeOfSupply || undefined,
     workOrderNo: existing.workOrderNo || undefined,
     quotationReference: existing.quotationNumber,
+    invoiceNumberMode: invoiceNumberMode || "AUTO",
+    invoiceNumber: invoiceNumber || undefined,
     items: existing.items.map((i) => ({
       productId: i.productId || undefined,
       serviceId: i.serviceId || undefined,
@@ -183,10 +183,21 @@ export async function convertQuotationToSales(id, organizationId) {
       hsnSac: i.hsnSac,
       quantity: toNum(i.quantity),
       unitRate: toNum(i.unitRate),
+      taxRate: Number(i.cgstRate) * 2 || Number(i.igstRate) || undefined,
     })),
   };
 
   const salesInvoice = await createSalesInvoice(organizationId, salesPayload);
+
+  await prisma.quotation.update({
+    where: { id },
+    data: {
+      convertedInvoiceId: salesInvoice.id,
+      convertedInvoiceNumber: salesInvoice.invoiceNumber,
+      convertedAt: new Date(),
+    },
+  });
+
   return { salesInvoice, quotation: existing };
 }
 

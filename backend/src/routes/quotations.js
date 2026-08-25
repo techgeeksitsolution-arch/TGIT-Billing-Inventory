@@ -61,7 +61,11 @@ quotationsRouter.post("/:id/cancel", async (req, res, next) => {
 quotationsRouter.post("/:id/convert", async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
-    const result = await convertQuotationToSales(req.params.id, org.id);
+    const result = await convertQuotationToSales(req.params.id, org.id, {
+      invoiceDate: req.body?.invoiceDate,
+      invoiceNumberMode: req.body?.invoiceNumberMode,
+      invoiceNumber: req.body?.invoiceNumber,
+    });
     res.status(201).json(result);
   } catch (e) { next(e); }
 });

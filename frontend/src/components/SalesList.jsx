@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useFetch } from "../api";
 import ImportModal from "./ImportModal.jsx";
+import { formatDate } from "../lib/format.js";
 
 const STATUS_LABELS = {
   DRAFT: { label: "Draft", color: "#f0ad4e" },
@@ -84,7 +85,7 @@ export function SalesList() {
                 {data?.items?.map((inv) => (
                   <tr key={inv.id}>
                     <td className="mono">{inv.invoiceNumber}</td>
-                    <td>{new Date(inv.invoiceDate).toLocaleDateString("en-IN")}</td>
+                    <td>{formatDate(inv.invoiceDate)}</td>
                     <td>{inv.customer?.name || "N/A"}</td>
                     <td>{inv.taxMode.replace(/_/g, " ")}</td>
                     <td className="amount">₹{Number(inv.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>

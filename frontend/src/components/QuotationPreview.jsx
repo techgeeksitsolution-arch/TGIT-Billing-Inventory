@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiPost } from "../api";
+import { taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
 
 function numberToWords(num) {
   if (num === 0) return "Zero";
@@ -42,11 +43,15 @@ export function QuotationPreview() {
   const [profile, setProfile] = useState({ name: "Tech Geeks IT Solution" });
   const [terms, setTerms] = useState([]);
   const [converting, setConverting] = useState(false);
+  const [showConvertForm, setShowConvertForm] = useState(false);
+  const [convertDate, setConvertDate] = useState(new Date().toISOString().split("T")[0]);
+  const [invoiceNumberMode, setInvoiceNumberMode] = useState("AUTO");
+  const [manualNumber, setManualNumber] = useState("");
 
   useEffect(() => {
     fetch(`/api/v1/quotations/${id}`)
       .then(r => { if (!r.ok) throw new Error("Not found"); return r.json(); })
-      .then(data => { setQuotation(data); setLoading(false); })
+      .then(data => { setQuotation(data); setConvertDate(data.quotationDate ? String(data.quotationDate).slice(0, 10) : new Date().toISOString().split("T")[0]); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
     fetch("/api/v1/settings/company-profile").then(r => r.json()).then(setProfile).catch(() => {});
     fetch("/api/v1/settings/terms?type=QUOTATION").then(r => r.json()).then(d => setTerms(Array.isArray(d) ? d.filter(t => t.isEnabled) : [])).catch(() => setTerms([]));
@@ -67,14 +72,19 @@ export function QuotationPreview() {
   };
 
   const handleConvert = async () => {
-    if (!confirm("Convert this quotation into a new Sales Invoice?")) return;
     setConverting(true);
     setError(null);
     try {
-      const result = await apiPost(`/quotations/${id}/convert`);
+      const result = await apiPost(`/quotations/${id}/convert`, {
+        invoiceDate: convertDate,
+        invoiceNumberMode,
+        invoiceNumber: invoiceNumberMode === "MANUAL" ? manualNumber : undefined,
+      });
       navigate(`/sales/${result.salesInvoice.id}`);
     } catch (e) {
-      setError(e.message);
+      const msg = e.message || "Conversion failed";
+      setError(msg);
+      setShowConvertForm(false);
     } finally {
       setConverting(false);
     }
@@ -107,14 +117,49 @@ export function QuotationPreview() {
       <div className="page-header no-print">
         <h1>Quotation {q.quotationNumber}</h1>
         <div className="header-actions">
-          {q.status === "DRAFT" && (
+          {q.convertedInvoiceId ? (
+            <button className="btn btn-primary" onClick={() => navigate(`/sales/${q.convertedInvoiceId}`)}>
+              View Converted Invoice {q.convertedInvoiceNumber}
+            </button>
+          ) : (q.status === "DRAFT" || q.status === "CONFIRMED") && (
             <>
-              <button className="btn btn-primary" onClick={handleConvert} disabled={converting}>
-                {converting ? "Converting..." : "Convert to Bill"}
-              </button>
-              <button className="btn btn-primary" onClick={handleFinalize} disabled={finalizing}>
-                {finalizing ? "Confirming..." : "Confirm Quotation"}
-              </button>
+              {!showConvertForm && (
+                <button className="btn btn-primary" onClick={() => setShowConvertForm(true)} disabled={converting}>
+                  Convert to Sale Invoice
+                </button>
+              )}
+              {showConvertForm && (
+                <div className="no-print convert-box" style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid #ddd", borderRadius: 6, marginRight: 8, background: "#fafafa" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <label>Invoice Date:</label>
+                    <input type="date" value={convertDate} onChange={(e) => setConvertDate(e.target.value)} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <label>Invoice Number:</label>
+                    <select value={invoiceNumberMode} onChange={(e) => setInvoiceNumberMode(e.target.value)}>
+                      <option value="AUTO">Auto Generate</option>
+                      <option value="MANUAL">Manual Number</option>
+                    </select>
+                  </div>
+                  {invoiceNumberMode === "MANUAL" && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <label>Number:</label>
+                      <input type="text" value={manualNumber} onChange={(e) => setManualNumber(e.target.value)} placeholder="e.g. TGIT/099/26-27" style={{ minWidth: 180 }} />
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn btn-primary" onClick={handleConvert} disabled={converting}>
+                      {converting ? "Creating..." : "Create Sale Invoice"}
+                    </button>
+                    <button className="btn btn-outline" onClick={() => setShowConvertForm(false)} disabled={converting}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {q.status === "DRAFT" && (
+                <button className="btn btn-primary" onClick={handleFinalize} disabled={finalizing}>
+                  {finalizing ? "Confirming..." : "Confirm Quotation"}
+                </button>
+              )}
               <button className="btn btn-outline" onClick={() => navigate(`/quotations/${id}/edit`)}>Edit</button>
             </>
           )}
@@ -214,11 +259,11 @@ export function QuotationPreview() {
             <div className="totals-summary">
               <div className="total-row"><span>Taxable Total</span><span>₹{Number(q.taxableTotal).toFixed(2)}</span></div>
               {isGST && q.taxMode === "INTRA_STATE_GST" && <>
-                <div className="total-row"><span>CGST</span><span>₹{Number(q.cgstTotal).toFixed(2)}</span></div>
-                <div className="total-row"><span>SGST</span><span>₹{Number(q.sgstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>CGST ({fmtPercent(taxPercent(Number(q.cgstTotal), Number(q.taxableTotal)))}%)</span><span>₹{Number(q.cgstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>SGST ({fmtPercent(taxPercent(Number(q.sgstTotal), Number(q.taxableTotal)))}%)</span><span>₹{Number(q.sgstTotal).toFixed(2)}</span></div>
               </>}
               {isGST && q.taxMode === "INTER_STATE_GST" && (
-                <div className="total-row"><span>IGST</span><span>₹{Number(q.igstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>IGST ({fmtPercent(taxPercent(Number(q.igstTotal), Number(q.taxableTotal)))}%)</span><span>₹{Number(q.igstTotal).toFixed(2)}</span></div>
               )}
               <div className="total-row"><span>Total Tax</span><span>₹{Number(q.totalTax).toFixed(2)}</span></div>
               {Number(q.roundOff) !== 0 && <div className="total-row"><span>Round Off</span><span>₹{Number(q.roundOff).toFixed(2)}</span></div>}

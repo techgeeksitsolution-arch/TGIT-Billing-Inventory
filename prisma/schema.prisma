@@ -425,6 +425,9 @@ model Quotation {
   status          DocumentStatus @default(DRAFT)
   createdById     String         @db.Uuid
   finalizedById   String?        @db.Uuid
+  convertedInvoiceId     String?
+  convertedInvoiceNumber String?
+  convertedAt     DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 

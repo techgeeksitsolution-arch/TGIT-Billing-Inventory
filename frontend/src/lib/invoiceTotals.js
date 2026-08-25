@@ -17,3 +17,15 @@ export const ROUND_OFF_MODES = [
   { value: "DOWN", label: "Round Down" },
   { value: "NONE", label: "None" },
 ];
+
+export function taxPercent(part, base) {
+  if (!base) return 0;
+  const p = (Number(part) / Number(base)) * 100;
+  return Math.round(p * 100) / 100;
+}
+
+export function fmtPercent(p) {
+  const r = Math.round(Number(p) * 100) / 100;
+  return String(r);
+}
+

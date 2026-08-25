@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { apiPost } from "../api";
+import { taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
+import { formatDate } from "../lib/format.js";
 
 function numberToWords(num) {
   if (num === 0) return "Zero";
@@ -130,7 +132,7 @@ export function InvoicePreview() {
           <div className="invoice-meta-grid">
             <div className="meta-group">
               <div className="meta-row"><span className="meta-label">Invoice No:</span><span className="meta-value mono">{inv.invoiceNumber}</span></div>
-              <div className="meta-row"><span className="meta-label">Date:</span><span className="meta-value">{new Date(inv.invoiceDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span></div>
+              <div className="meta-row"><span className="meta-label">Date:</span><span className="meta-value">{formatDate(inv.invoiceDate)}</span></div>
               <div className="meta-row"><span className="meta-label">Tax Mode:</span><span className="meta-value">{inv.taxMode.replace(/_/g, " ")}</span></div>
               {inv.placeOfSupply && <div className="meta-row"><span className="meta-label">Place of Supply:</span><span className="meta-value">{inv.placeOfSupply}</span></div>}
               {inv.workOrderNo && <div className="meta-row"><span className="meta-label">Work Order No.:</span><span className="meta-value">{inv.workOrderNo}</span></div>}
@@ -190,11 +192,11 @@ export function InvoicePreview() {
             <div className="totals-summary">
               <div className="total-row"><span>Taxable Total</span><span>₹{Number(inv.taxableTotal).toFixed(2)}</span></div>
               {isGST && inv.taxMode === "INTRA_STATE_GST" && <>
-                <div className="total-row"><span>CGST</span><span>₹{Number(inv.cgstTotal).toFixed(2)}</span></div>
-                <div className="total-row"><span>SGST</span><span>₹{Number(inv.sgstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>CGST ({fmtPercent(taxPercent(Number(inv.cgstTotal), Number(inv.taxableTotal)))}%)</span><span>₹{Number(inv.cgstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>SGST ({fmtPercent(taxPercent(Number(inv.sgstTotal), Number(inv.taxableTotal)))}%)</span><span>₹{Number(inv.sgstTotal).toFixed(2)}</span></div>
               </>}
               {isGST && inv.taxMode === "INTER_STATE_GST" && (
-                <div className="total-row"><span>IGST</span><span>₹{Number(inv.igstTotal).toFixed(2)}</span></div>
+                <div className="total-row"><span>IGST ({fmtPercent(taxPercent(Number(inv.igstTotal), Number(inv.taxableTotal)))}%)</span><span>₹{Number(inv.igstTotal).toFixed(2)}</span></div>
               )}
               <div className="total-row"><span>Total Tax</span><span>₹{Number(inv.totalTax).toFixed(2)}</span></div>
               <div className="total-row"><span>Discount</span><span>₹{Number(inv.discount || 0).toFixed(2)}</span></div>

@@ -36,7 +36,7 @@ export async function getNextSalesNumber(organizationId) {
 }
 
 export async function resolveItemTax(item, taxMode) {
-  let taxRatePercent = 0;
+  let taxRatePercent = item.taxRate != null ? Number(item.taxRate) : 0;
   let hsnSac = item.hsnSac || "";
   let description = item.description || "";
 
@@ -45,7 +45,7 @@ export async function resolveItemTax(item, taxMode) {
     if (!product) throw Object.assign(new Error("Product not found"), { statusCode: 400 });
     if (!description) description = product.name;
     if (!hsnSac) hsnSac = product.hsnCode || "";
-    if (product.taxRateId) {
+    if (taxRatePercent === 0 && product.taxRateId) {
       const tr = await prisma.taxRate.findUnique({ where: { id: product.taxRateId } });
       if (tr) taxRatePercent = Number(tr.rate);
     }
@@ -54,7 +54,7 @@ export async function resolveItemTax(item, taxMode) {
     if (!service) throw Object.assign(new Error("Service not found"), { statusCode: 400 });
     if (!description) description = service.name;
     if (!hsnSac) hsnSac = service.sacCode || "";
-    if (service.taxRateId) {
+    if (taxRatePercent === 0 && service.taxRateId) {
       const tr = await prisma.taxRate.findUnique({ where: { id: service.taxRateId } });
       if (tr) taxRatePercent = Number(tr.rate);
     }
