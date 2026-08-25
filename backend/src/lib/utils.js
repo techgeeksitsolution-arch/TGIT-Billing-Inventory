@@ -10,6 +10,17 @@ export function getCurrentFinancialYear() {
   return `${(year - 1).toString().slice(-2)}-${year.toString().slice(-2)}`;
 }
 
+export function getFinancialYearFromDate(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return null;
+  const month = d.getMonth();
+  const year = d.getFullYear();
+  if (month >= 3) {
+    return `${year.toString().slice(-2)}-${(year + 1).toString().slice(-2)}`;
+  }
+  return `${(year - 1).toString().slice(-2)}-${year.toString().slice(-2)}`;
+}
+
 export function getFinancialYearRange() {
   const now = new Date();
   const month = now.getMonth();

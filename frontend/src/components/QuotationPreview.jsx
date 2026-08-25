@@ -45,8 +45,10 @@ export function QuotationPreview() {
   const [converting, setConverting] = useState(false);
   const [showConvertForm, setShowConvertForm] = useState(false);
   const [convertDate, setConvertDate] = useState(new Date().toISOString().split("T")[0]);
-  const [invoiceNumberMode, setInvoiceNumberMode] = useState("AUTO");
+  const [invoiceNumberMode, setInvoiceNumberMode] = useState("");
   const [manualNumber, setManualNumber] = useState("");
+  const [numberExists, setNumberExists] = useState(false);
+  const [validatingNumber, setValidatingNumber] = useState(false);
 
   useEffect(() => {
     fetch(`/api/v1/quotations/${id}`)
@@ -56,6 +58,36 @@ export function QuotationPreview() {
     fetch("/api/v1/settings/company-profile").then(r => r.json()).then(setProfile).catch(() => {});
     fetch("/api/v1/settings/terms?type=QUOTATION").then(r => r.json()).then(d => setTerms(Array.isArray(d) ? d.filter(t => t.isEnabled) : [])).catch(() => setTerms([]));
   }, [id]);
+
+  useEffect(() => {
+    if (invoiceNumberMode === "MANUAL" && manualNumber.trim()) {
+      setValidatingNumber(true);
+      const t = setTimeout(async () => {
+        try {
+          const r = await fetch(`/api/v1/sales/check-number?number=${encodeURIComponent(manualNumber.trim())}`);
+          const j = await r.json();
+          setNumberExists(!!j.exists);
+        } catch {
+          setNumberExists(false);
+        } finally {
+          setValidatingNumber(false);
+        }
+      }, 400);
+      return () => clearTimeout(t);
+    }
+    setNumberExists(false);
+    setValidatingNumber(false);
+  }, [invoiceNumberMode, manualNumber]);
+
+  const dateValid = !!convertDate;
+  const modeValid = invoiceNumberMode === "AUTO" || invoiceNumberMode === "MANUAL";
+  const manualValid =
+    invoiceNumberMode !== "MANUAL" || (manualNumber.trim().length > 0 && !numberExists && !validatingNumber);
+  const canCreate = dateValid && modeValid && manualValid;
+  let createHint = "";
+  if (!dateValid) createHint = "Invoice Date is required.";
+  else if (!modeValid) createHint = "Select an Invoice Number Mode.";
+  else if (invoiceNumberMode === "MANUAL" && !manualNumber.trim()) createHint = "Enter an Invoice Number.";
 
   const handleFinalize = async () => {
     setFinalizing(true);
@@ -71,19 +103,21 @@ export function QuotationPreview() {
   };
 
   const handleConvert = async () => {
+    if (!canCreate) {
+      setError(createHint || "Please complete the required fields.");
+      return;
+    }
     setConverting(true);
     setError(null);
     try {
       const result = await apiPost(`/quotations/${id}/convert`, {
         invoiceDate: convertDate,
         invoiceNumberMode,
-        invoiceNumber: invoiceNumberMode === "MANUAL" ? manualNumber : undefined,
+        invoiceNumber: invoiceNumberMode === "MANUAL" ? manualNumber.trim() : undefined,
       });
       navigate(`/sales/${result.salesInvoice.id}`);
     } catch (e) {
-      const msg = e.message || "Conversion failed";
-      setError(msg);
-      setShowConvertForm(false);
+      setError(e.message || "Conversion failed");
     } finally {
       setConverting(false);
     }
@@ -127,34 +161,43 @@ export function QuotationPreview() {
                 </button>
               )}
               {q.status === "CONFIRMED" && !showConvertForm && (
-                <button className="btn btn-primary" onClick={() => setShowConvertForm(true)} disabled={converting}>
+                <button className="btn btn-sm btn-primary" onClick={() => setShowConvertForm(true)} disabled={converting}>
                   Convert to Sale Invoice
                 </button>
               )}
               {q.status === "CONFIRMED" && showConvertForm && (
-                <div className="no-print convert-box" style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid #ddd", borderRadius: 6, marginRight: 8, background: "#fafafa" }}>
+                <div className="no-print convert-box" style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", gap: 8, padding: 12, border: "1px solid #ddd", borderRadius: 6, marginRight: 8, background: "#fafafa", width: "auto", maxWidth: 340 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <label>Invoice Date:</label>
+                    <label style={{ minWidth: 100 }}>Invoice Date *</label>
                     <input type="date" value={convertDate} onChange={(e) => setConvertDate(e.target.value)} />
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <label>Invoice Number:</label>
+                    <label style={{ minWidth: 100 }}>Number Mode *</label>
                     <select value={invoiceNumberMode} onChange={(e) => setInvoiceNumberMode(e.target.value)}>
+                      <option value="">Select mode…</option>
                       <option value="AUTO">Auto Generate</option>
                       <option value="MANUAL">Manual Number</option>
                     </select>
                   </div>
                   {invoiceNumberMode === "MANUAL" && (
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <label>Number:</label>
+                      <label style={{ minWidth: 100 }}>Invoice Number *</label>
                       <input type="text" value={manualNumber} onChange={(e) => setManualNumber(e.target.value)} placeholder="e.g. TGIT/099/26-27" style={{ minWidth: 180 }} />
                     </div>
                   )}
+                  {invoiceNumberMode === "MANUAL" && numberExists && (
+                    <div className="error-msg" style={{ fontSize: "0.78rem", padding: 0 }}>
+                      Invoice number "{manualNumber.trim()}" already exists.
+                    </div>
+                  )}
+                  {!canCreate && createHint && !numberExists && (
+                    <div style={{ fontSize: "0.78rem", color: "#667085", padding: 0 }}>{createHint}</div>
+                  )}
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button className="btn btn-primary" onClick={handleConvert} disabled={converting}>
-                      {converting ? "Creating..." : "Create Sale Invoice"}
+                    <button className="btn btn-sm btn-primary" onClick={handleConvert} disabled={converting || !canCreate}>
+                      {converting ? "Creating..." : "Create GST Invoice"}
                     </button>
-                    <button className="btn btn-outline" onClick={() => setShowConvertForm(false)} disabled={converting}>Cancel</button>
+                    <button className="btn btn-sm btn-outline" onClick={() => setShowConvertForm(false)} disabled={converting}>Cancel</button>
                   </div>
                 </div>
               )}

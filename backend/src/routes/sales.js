@@ -1,12 +1,26 @@
 import { Router } from "express";
 import { listSalesInvoices, getSalesInvoice, createSalesInvoice, updateSalesInvoice, finalizeSalesInvoice, cancelSalesInvoice, checkStockAvailability } from "../services/salesService.js";
-import { getOrCreateOrgAndUser } from "../db.js";
+import { prisma, getOrCreateOrgAndUser } from "../db.js";
 import { uploadExcel } from "../lib/upload.js";
 import {
   readRowsFromBuffer, buildTemplateBuffer, buildSalesExportBuffer, validateSalesImport, createSalesFromGroups, importBatches, randomUUID, SALES_HEADERS,
 } from "../lib/importExport.js";
 
 export const salesRouter = Router();
+
+salesRouter.get("/check-number", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const number = String(req.query.number || "").trim();
+    if (!number) return res.json({ exists: false });
+    const existing = await prisma.salesInvoice.findFirst({
+      where: { organizationId: org.id, invoiceNumber: number },
+    });
+    res.json({ exists: !!existing });
+  } catch (e) {
+    next(e);
+  }
+});
 
 salesRouter.get("/", async (req, res, next) => {
   try {

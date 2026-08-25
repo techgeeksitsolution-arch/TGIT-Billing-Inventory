@@ -1,5 +1,5 @@
 import { prisma, getActiveFinancialYear } from "../db.js";
-import { calculateItemTax, calculateInvoiceTotals, pickTotals } from "../lib/utils.js";
+import { calculateItemTax, calculateInvoiceTotals, pickTotals, getFinancialYearFromDate } from "../lib/utils.js";
 
 export async function getNextQuotationNumber(organizationId) {
   const fy = await getActiveFinancialYear(organizationId);
@@ -157,25 +157,82 @@ export async function convertQuotationToSales(id, organizationId, { invoiceDate,
     where: { id, organizationId },
     include: { items: { include: { product: true, service: true } } },
   });
+  // 1. Quotation exists
   if (!existing) throw Object.assign(new Error("Quotation not found"), { statusCode: 404 });
+  // 2. Quotation is eligible for conversion (must be confirmed; not cancelled)
   if (existing.status === "CANCELLED") throw Object.assign(new Error("Cancelled quotation cannot be converted"), { statusCode: 400 });
-  if (existing.convertedInvoiceId) throw Object.assign(new Error("This quotation has already been converted"), { statusCode: 400 });
+  if (existing.status !== "CONFIRMED") throw Object.assign(new Error("Quotation must be confirmed before conversion"), { statusCode: 400 });
+  // 9 (duplicate conversion protection)
+  if (existing.convertedInvoiceId) throw Object.assign(new Error(`Quotation already converted to Sales Invoice ${existing.convertedInvoiceNumber}`), { statusCode: 400 });
 
   const { createSalesInvoice } = await import("./salesService.js");
 
   const toNum = (v) => (v && typeof v === "object" && typeof v.toNumber === "function" ? v.toNumber() : Number(v));
 
-  const effectiveDate = invoiceDate || (existing.quotationDate ? existing.quotationDate.toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
+  // 3. Customer exists
+  if (!existing.customerId) throw Object.assign(new Error("Quotation has no customer; cannot create a Sales Invoice"), { statusCode: 400 });
+  // 9. Valid line items
+  if (!existing.items || existing.items.length === 0) throw Object.assign(new Error("Quotation has no line items; cannot create a Sales Invoice"), { statusCode: 400 });
+
+  // 5. Invoice Date is valid (mandatory)
+  const dateValue = invoiceDate ? new Date(invoiceDate) : null;
+  if (!dateValue || isNaN(dateValue.getTime())) {
+    throw Object.assign(new Error("Invoice Date is required."), { statusCode: 400 });
+  }
+  const effectiveDate = dateValue.toISOString().split("T")[0];
+
+  // 6. Invoice Number Mode is selected
+  const mode = invoiceNumberMode ? String(invoiceNumberMode).toUpperCase() : "";
+  if (mode !== "AUTO" && mode !== "MANUAL") {
+    throw Object.assign(new Error("Invoice Number Mode is required."), { statusCode: 400 });
+  }
+
+  // 4. If Manual -> number present + unique
+  let normalizedManualNumber;
+  if (mode === "MANUAL") {
+    normalizedManualNumber = String(invoiceNumber || "").trim();
+    if (!normalizedManualNumber) {
+      throw Object.assign(new Error("Invoice Number is required in manual mode."), { statusCode: 400 });
+    }
+    const dup = await prisma.salesInvoice.findFirst({
+      where: { organizationId, invoiceNumber: normalizedManualNumber },
+    });
+    if (dup) {
+      throw Object.assign(new Error(`Invoice number "${normalizedManualNumber}" already exists.`), { statusCode: 400 });
+    }
+  }
+
+  // 6/8. Financial Year consistency: invoice date must fall within the active Financial Year
+  const activeFY = await getActiveFinancialYear(organizationId);
+  const dateFY = getFinancialYearFromDate(dateValue);
+  if (dateFY !== activeFY) {
+    throw Object.assign(
+      new Error(
+        `Invoice Date (${effectiveDate}) falls outside the active Financial Year (${activeFY}). ` +
+          `Select a date within the active FY or update the Financial Year in Settings.`
+      ),
+      { statusCode: 400 }
+    );
+  }
+  if (mode === "MANUAL") {
+    const m = normalizedManualNumber.match(/^(.*)\/(\d+)\/(.*)$/);
+    if (m && m[3] !== activeFY) {
+      throw Object.assign(
+        new Error(`Invoice number financial year (${m[3]}) does not match the active Financial Year (${activeFY}).`),
+        { statusCode: 400 }
+      );
+    }
+  }
 
   const salesPayload = {
-    customerId: existing.customerId || undefined,
+    customerId: existing.customerId,
     invoiceDate: effectiveDate,
     taxMode: existing.taxMode,
     placeOfSupply: existing.placeOfSupply || undefined,
-    workOrderNo: existing.workOrderNo || undefined,
+    workOrderNo: existing.workOrderNo || null,
     quotationReference: existing.quotationNumber,
-    invoiceNumberMode: invoiceNumberMode || "AUTO",
-    invoiceNumber: invoiceNumber || undefined,
+    invoiceNumberMode: mode,
+    invoiceNumber: mode === "MANUAL" ? normalizedManualNumber : undefined,
     items: existing.items.map((i) => ({
       productId: i.productId || undefined,
       serviceId: i.serviceId || undefined,
