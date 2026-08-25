@@ -58,7 +58,6 @@ export function QuotationPreview() {
   }, [id]);
 
   const handleFinalize = async () => {
-    if (!confirm("Confirm this quotation?")) return;
     setFinalizing(true);
     setError(null);
     try {
@@ -91,7 +90,6 @@ export function QuotationPreview() {
   };
 
   const handleCancel = async () => {
-    if (!confirm("Cancel this quotation?")) return;
     setCancelling(true);
     setError(null);
     try {
@@ -121,14 +119,19 @@ export function QuotationPreview() {
             <button className="btn btn-primary" onClick={() => navigate(`/sales/${q.convertedInvoiceId}`)}>
               View Converted Invoice {q.convertedInvoiceNumber}
             </button>
-          ) : (q.status === "DRAFT" || q.status === "CONFIRMED") && (
+          ) : (
             <>
-              {!showConvertForm && (
+              {q.status === "DRAFT" && (
+                <button className="btn btn-primary" onClick={handleFinalize} disabled={finalizing}>
+                  {finalizing ? "Confirming..." : "Confirm Quotation"}
+                </button>
+              )}
+              {q.status === "CONFIRMED" && !showConvertForm && (
                 <button className="btn btn-primary" onClick={() => setShowConvertForm(true)} disabled={converting}>
                   Convert to Sale Invoice
                 </button>
               )}
-              {showConvertForm && (
+              {q.status === "CONFIRMED" && showConvertForm && (
                 <div className="no-print convert-box" style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid #ddd", borderRadius: 6, marginRight: 8, background: "#fafafa" }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <label>Invoice Date:</label>
@@ -154,11 +157,6 @@ export function QuotationPreview() {
                     <button className="btn btn-outline" onClick={() => setShowConvertForm(false)} disabled={converting}>Cancel</button>
                   </div>
                 </div>
-              )}
-              {q.status === "DRAFT" && (
-                <button className="btn btn-primary" onClick={handleFinalize} disabled={finalizing}>
-                  {finalizing ? "Confirming..." : "Confirm Quotation"}
-                </button>
               )}
               <button className="btn btn-outline" onClick={() => navigate(`/quotations/${id}/edit`)}>Edit</button>
             </>
