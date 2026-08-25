@@ -14,6 +14,9 @@ import { ServiceList } from "./components/ServiceList";
 import { SupplierList } from "./components/SupplierList";
 import { PurchaseList } from "./components/PurchaseList";
 import { Settings } from "./components/Settings";
+import { NonGstBillList } from "./components/NonGstBillList";
+import { NonGstBillForm } from "./components/NonGstBillForm";
+import { NonGstBillPreview } from "./components/NonGstBillPreview";
 
 function App() {
   return (
@@ -28,12 +31,22 @@ function App() {
             <NavLink to="/dashboard" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
               <span className="nav-icon">&#9632;</span> Dashboard
             </NavLink>
-            <div className="nav-divider">Billing</div>
+            <div className="nav-divider">GST Billing</div>
             <NavLink to="/sales" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
               <span className="nav-icon">&#128196;</span> Sales Invoices
             </NavLink>
+            <NavLink to="/sales/new" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span className="nav-icon">&#43;</span> New GST Invoice
+            </NavLink>
             <NavLink to="/quotations" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
               <span className="nav-icon">&#128196;</span> Quotations
+            </NavLink>
+            <div className="nav-divider">Non-GST Billing</div>
+            <NavLink to="/nongst" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span className="nav-icon">&#128196;</span> Bills
+            </NavLink>
+            <NavLink to="/nongst/new" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span className="nav-icon">&#43;</span> New Non-GST Bill
             </NavLink>
             <div className="nav-divider">Master Data</div>
             <NavLink to="/customers" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
@@ -70,6 +83,10 @@ function App() {
             <Route path="/quotations/new" element={<QuotationForm />} />
             <Route path="/quotations/:id" element={<QuotationPreview />} />
             <Route path="/quotations/:id/edit" element={<QuotationForm />} />
+            <Route path="/nongst" element={<NonGstBillList />} />
+            <Route path="/nongst/new" element={<NonGstBillForm />} />
+            <Route path="/nongst/:id" element={<NonGstBillPreview />} />
+            <Route path="/nongst/:id/edit" element={<NonGstBillForm />} />
             <Route path="/customers" element={<CustomerList />} />
             <Route path="/products" element={<ProductList />} />
             <Route path="/services" element={<ServiceList />} />

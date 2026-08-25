@@ -68,6 +68,7 @@ model Organization {
   stockMovements    StockMovement[]
   stockAdjustments  StockAdjustment[]
   ghostBills        GhostBill[]
+  nonGstBills       NonGstBill[]
   auditLogs         AuditLog[]
   companyProfile    CompanyProfile?
   documentTerms     DocumentTerm[]
@@ -93,6 +94,7 @@ model User {
   createdQuotations  Quotation[]       @relation("QuotationCreatedBy")
   finalizedQuotations Quotation[]     @relation("QuotationFinalizedBy")
   createdGhostBills  GhostBill[]       @relation("GhostCreatedBy")
+  createdNonGstBills NonGstBill[]       @relation("NonGstCreatedBy")
   stockMovements     StockMovement[]
   createdAdjustments StockAdjustment[]
 }
@@ -184,6 +186,7 @@ model Product {
   stockMovements   StockMovement[]
   stockAdjustments StockAdjustmentItem[]
   ghostItems       GhostBillItem[]
+  nonGstItems       NonGstBillItem[]
 
   @@unique([organizationId, sku])
   @@index([organizationId, name])
@@ -222,6 +225,7 @@ model Customer {
   salesInvoices  SalesInvoice[]
   quotations     Quotation[]
   ghostBills     GhostBill[]
+  nonGstBills    NonGstBill[]
 
   @@index([organizationId, name])
 }
@@ -273,6 +277,7 @@ model PurchaseInvoice {
   igstTotal         Decimal        @default(0) @db.Decimal(14, 2)
   totalTax          Decimal        @default(0) @db.Decimal(14, 2)
   roundOff          Decimal        @default(0) @db.Decimal(14, 2)
+  roundOffMode       String?        @default("NEAREST")
   grandTotal        Decimal        @default(0) @db.Decimal(14, 2)
   status            DocumentStatus @default(DRAFT)
   source            ImportSource   @default(MANUAL)
@@ -350,7 +355,10 @@ model SalesInvoice {
   sgstTotal      Decimal        @default(0) @db.Decimal(14, 2)
   igstTotal      Decimal        @default(0) @db.Decimal(14, 2)
   totalTax       Decimal        @default(0) @db.Decimal(14, 2)
+  discount      Decimal        @default(0) @db.Decimal(14, 2)
+  otherCharges  Decimal        @default(0) @db.Decimal(14, 2)
   roundOff       Decimal        @default(0) @db.Decimal(14, 2)
+  roundOffMode   String?        @default("NEAREST")
   grandTotal     Decimal        @default(0) @db.Decimal(14, 2)
   status         DocumentStatus @default(DRAFT)
   createdById    String         @db.Uuid
@@ -584,11 +592,54 @@ model CompanyProfile {
   salesPrefix    String?  @default("TGIT")
   quotationPrefix String? @default("TGIT/QUOT")
   purchasePrefix  String?  @default("TGIT/P")
+  nonGstPrefix    String?  @default("TGIT/NG")
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId])
+}
+
+model NonGstBill {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @db.Uuid
+  billNumber       String
+  billDate         DateTime       @default(now())
+  customerId       String?        @db.Uuid
+  customerName     String
+  customerPhone    String?
+  customerAddress  String?
+  paymentMode      String?
+  notes            String?
+  taxableTotal     Decimal        @default(0) @db.Decimal(14, 2)
+  discount         Decimal        @default(0) @db.Decimal(14, 2)
+  otherCharges     Decimal        @default(0) @db.Decimal(14, 2)
+  roundOffMode     String?        @default("NEAREST")
+  roundOff         Decimal        @default(0) @db.Decimal(14, 2)
+  grandTotal       Decimal        @default(0) @db.Decimal(14, 2)
+  status           DocumentStatus @default(DRAFT)
+  createdById      String         @db.Uuid
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  customer     Customer?      @relation(fields: [customerId], references: [id])
+  items        NonGstBillItem[]
+  createdBy    User           @relation("NonGstCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([organizationId, billNumber])
+}
+
+model NonGstBillItem {
+  id           String      @id @default(uuid()) @db.Uuid
+  billId       String      @db.Uuid
+  productId    String?     @db.Uuid
+  description  String
+  price        Decimal     @db.Decimal(14, 2)
+  quantity     Decimal     @db.Decimal(14, 3)
+  totalPrice   Decimal     @db.Decimal(14, 2)
+  bill         NonGstBill  @relation(fields: [billId], references: [id], onDelete: Cascade)
+  product      Product?    @relation(fields: [productId], references: [id])
 }
 
 model DocumentTerm {

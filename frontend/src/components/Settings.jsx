@@ -191,6 +191,8 @@ export function Settings() {
           <div className="form-row">
             <div className="form-group"><label>Sales Invoice Prefix</label><input value={profile.salesPrefix || "TGIT"} onChange={(e) => setProfile({ ...profile, salesPrefix: e.target.value })} placeholder="TGIT" /></div>
             <div className="form-group"><label>Quotation Prefix</label><input value={profile.quotationPrefix || "TGIT/QUOT"} onChange={(e) => setProfile({ ...profile, quotationPrefix: e.target.value })} placeholder="TGIT/QUOT" /></div>
+            <div className="form-group"><label>Purchase Prefix</label><input value={profile.purchasePrefix || "TGIT/P"} onChange={(e) => setProfile({ ...profile, purchasePrefix: e.target.value })} placeholder="TGIT/P" /></div>
+            <div className="form-group"><label>Non-GST Bill Prefix</label><input value={profile.nonGstPrefix || "TGIT/NG"} onChange={(e) => setProfile({ ...profile, nonGstPrefix: e.target.value })} placeholder="TGIT/NG" /></div>
           </div>
           <button className="btn btn-primary" onClick={handleSaveProfile} disabled={saving}>Save Profile</button>
         </div>

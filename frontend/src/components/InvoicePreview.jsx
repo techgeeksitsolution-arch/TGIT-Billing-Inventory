@@ -197,7 +197,10 @@ export function InvoicePreview() {
                 <div className="total-row"><span>IGST</span><span>₹{Number(inv.igstTotal).toFixed(2)}</span></div>
               )}
               <div className="total-row"><span>Total Tax</span><span>₹{Number(inv.totalTax).toFixed(2)}</span></div>
-              {Number(inv.roundOff) !== 0 && <div className="total-row"><span>Round Off</span><span>₹{Number(inv.roundOff).toFixed(2)}</span></div>}
+              <div className="total-row"><span>Discount</span><span>₹{Number(inv.discount || 0).toFixed(2)}</span></div>
+              <div className="total-row"><span>Other Charges</span><span>₹{Number(inv.otherCharges || 0).toFixed(2)}</span></div>
+              <div className="total-row"><span>Calculated Total</span><span>₹{(Number(inv.taxableTotal) + Number(inv.totalTax) + Number(inv.otherCharges || 0) - Number(inv.discount || 0)).toFixed(2)}</span></div>
+              <div className="total-row"><span>Round Off</span><span>₹{Number(inv.roundOff || 0).toFixed(2)}</span></div>
               <div className="total-row grand"><span>Grand Total</span><span>₹{Number(inv.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
             </div>
           </div>

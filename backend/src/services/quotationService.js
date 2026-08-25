@@ -1,5 +1,5 @@
 import { prisma, getActiveFinancialYear } from "../db.js";
-import { calculateItemTax, calculateInvoiceTotals } from "../lib/utils.js";
+import { calculateItemTax, calculateInvoiceTotals, pickTotals } from "../lib/utils.js";
 
 export async function getNextQuotationNumber(organizationId) {
   const fy = await getActiveFinancialYear(organizationId);
@@ -94,7 +94,7 @@ export async function createQuotation(organizationId, data) {
       taxMode: data.taxMode || "NON_GST",
       placeOfSupply: data.placeOfSupply || null,
       notes: data.notes || null,
-      ...totals,
+      ...pickTotals(totals),
       status: "DRAFT",
       createdById: user.id,
       items: { create: processedItems },
@@ -122,7 +122,7 @@ export async function updateQuotation(id, organizationId, data) {
     }
     const totals = calculateInvoiceTotals(processedItems, data.taxMode || existing.taxMode);
     const updatePayload = {
-      ...totals,
+      ...pickTotals(totals),
       taxMode: data.taxMode || existing.taxMode,
       customerName: data.customerName !== undefined ? data.customerName : existing.customerName,
     };

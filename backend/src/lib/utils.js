@@ -68,7 +68,23 @@ export function calculateItemTax(item, taxMode, taxRatePercent) {
   };
 }
 
-export function calculateInvoiceTotals(items, taxMode) {
+export function applyRoundOff(calculatedTotal, roundOffMode) {
+  const ct = roundTo2(calculatedTotal);
+  const mode = (roundOffMode || "NEAREST").toUpperCase();
+  if (mode === "NONE") {
+    return { grandTotal: ct, roundOff: 0 };
+  }
+  let grandTotal;
+  if (mode === "UP") grandTotal = Math.ceil(ct);
+  else if (mode === "DOWN") grandTotal = Math.floor(ct);
+  else grandTotal = Math.round(ct);
+  return { grandTotal, roundOff: roundTo2(grandTotal - ct) };
+}
+
+export function calculateInvoiceTotals(items, taxMode, roundOffMode = "NEAREST", extra = {}) {
+  const discount = Number(extra.discount) || 0;
+  const otherCharges = Number(extra.otherCharges) || 0;
+
   let taxableTotal = 0;
   let cgstTotal = 0;
   let sgstTotal = 0;
@@ -81,14 +97,14 @@ export function calculateInvoiceTotals(items, taxMode) {
     igstTotal += Number(item.igstAmount);
   }
 
-  const totalTax = roundTo2(cgstTotal + sgstTotal + igstTotal);
   taxableTotal = roundTo2(taxableTotal);
   cgstTotal = roundTo2(cgstTotal);
   sgstTotal = roundTo2(sgstTotal);
   igstTotal = roundTo2(igstTotal);
-  const grandTotalPreRound = taxableTotal + totalTax;
-  const grandTotal = Math.round(grandTotalPreRound);
-  const roundOff = roundTo2(grandTotal - grandTotalPreRound);
+  const totalTax = roundTo2(cgstTotal + sgstTotal + igstTotal);
+
+  const calculatedTotal = roundTo2(taxableTotal + totalTax + otherCharges - discount);
+  const { grandTotal, roundOff } = applyRoundOff(calculatedTotal, roundOffMode);
 
   return {
     taxableTotal,
@@ -96,8 +112,23 @@ export function calculateInvoiceTotals(items, taxMode) {
     sgstTotal,
     igstTotal,
     totalTax,
+    discount,
+    otherCharges,
+    calculatedTotal,
     roundOff,
     grandTotal,
+  };
+}
+
+export function pickTotals(totals) {
+  return {
+    taxableTotal: totals.taxableTotal,
+    cgstTotal: totals.cgstTotal,
+    sgstTotal: totals.sgstTotal,
+    igstTotal: totals.igstTotal,
+    totalTax: totals.totalTax,
+    roundOff: totals.roundOff,
+    grandTotal: totals.grandTotal,
   };
 }
 

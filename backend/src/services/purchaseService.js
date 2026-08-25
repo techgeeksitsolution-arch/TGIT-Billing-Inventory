@@ -1,5 +1,5 @@
 import { prisma, getActiveFinancialYear, getOrCreateOrgAndUser } from "../db.js";
-import { calculateItemTax, calculateInvoiceTotals, roundTo2 } from "../lib/utils.js";
+import { calculateItemTax, calculateInvoiceTotals, pickTotals, roundTo2 } from "../lib/utils.js";
 
 export async function getNextPurchaseNumber(organizationId) {
   const fy = await getActiveFinancialYear(organizationId);
@@ -108,7 +108,7 @@ export async function createPurchase(organizationId, data) {
       taxMode,
       placeOfSupply: data.placeOfSupply || null,
       source: "MANUAL",
-      ...totals,
+      ...pickTotals(totals),
       status: "DRAFT",
       createdById: user.id,
       items: { create: processed },
@@ -131,7 +131,7 @@ export async function updatePurchase(id, organizationId, data) {
     await prisma.purchaseInvoice.update({
       where: { id },
       data: {
-        ...totals,
+        ...pickTotals(totals),
         supplierId: data.supplierId || existing.supplierId,
         supplierInvoiceNo: data.supplierInvoiceNo !== undefined ? data.supplierInvoiceNo : existing.supplierInvoiceNo,
         invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : existing.invoiceDate,

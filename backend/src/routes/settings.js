@@ -55,7 +55,7 @@ settingsRouter.get("/company-profile", async (req, res, next) => {
 settingsRouter.put("/company-profile", async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
-    const fields = ["name", "gstin", "udyam", "address", "phone", "mobile", "email", "website", "state", "pin", "bankName", "branch", "accountName", "accountNumber", "ifsc", "upiId", "invoiceFooter", "invoiceNotes", "logoStorageKey", "logoBase64", "salesPrefix", "quotationPrefix"];
+    const fields = ["name", "gstin", "udyam", "address", "phone", "mobile", "email", "website", "state", "pin", "bankName", "branch", "accountName", "accountNumber", "ifsc", "upiId", "invoiceFooter", "invoiceNotes", "logoStorageKey", "logoBase64", "salesPrefix", "quotationPrefix", "purchasePrefix", "nonGstPrefix"];
     const data = {};
     for (const f of fields) {
       if (req.body[f] !== undefined) data[f] = req.body[f] === "" ? null : req.body[f];

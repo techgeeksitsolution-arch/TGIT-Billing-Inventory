@@ -1,5 +1,11 @@
-import { prisma, getActiveFinancialYear } from "../db.js";
+import { prisma, getActiveFinancialYear, getOrCreateOrgAndUser } from "../db.js";
 import { calculateItemTax, calculateInvoiceTotals, roundTo2 } from "../lib/utils.js";
+
+function statusError(message, statusCode = 400, code) {
+  const err = Object.assign(new Error(message), { statusCode });
+  if (code) err.code = code;
+  return err;
+}
 
 export async function getNextSalesNumber(organizationId) {
   const fy = await getActiveFinancialYear(organizationId);
@@ -125,33 +131,78 @@ export async function getSalesInvoice(id, organizationId) {
 }
 
 export async function createSalesInvoice(organizationId, data) {
-  const { org, user } = await (await import("../db.js")).getOrCreateOrgAndUser();
+  const { org, user } = await getOrCreateOrgAndUser();
   const orgId = org.id;
-  const invoiceNumber = await getNextSalesNumber(orgId);
+  const taxMode = data.taxMode || "NON_GST";
+  const roundOffMode = data.roundOffMode || "NEAREST";
+  const discount = Number(data.discount) || 0;
+  const otherCharges = Number(data.otherCharges) || 0;
+
+  let invoiceNumber;
+  const mode = (data.invoiceNumberMode || "AUTO").toUpperCase();
+  if (mode === "MANUAL") {
+    invoiceNumber = String(data.invoiceNumber || "").trim();
+    if (!invoiceNumber) throw statusError("Invoice number is required in manual mode", 400, "MISSING_INVOICE_NUMBER");
+    const dup = await prisma.salesInvoice.findFirst({ where: { organizationId: orgId, invoiceNumber } });
+    if (dup) throw statusError(`Invoice number "${invoiceNumber}" already exists`, 400, "DUPLICATE_INVOICE_NUMBER");
+    const m = invoiceNumber.match(/^(.*)\/(\d+)\/(.*)$/);
+    if (m) {
+      const prefix = m[1];
+      const num = parseInt(m[2], 10);
+      const fy = m[3];
+      const existingSeq = await prisma.documentSequence.findUnique({
+        where: { organizationId_sequenceType_financialYear: { organizationId: orgId, sequenceType: "SALES", financialYear: fy } },
+      });
+      const nextNum = existingSeq ? Math.max(existingSeq.lastNumber, num) : num;
+      await prisma.documentSequence.upsert({
+        where: {
+          organizationId_sequenceType_financialYear: { organizationId: orgId, sequenceType: "SALES", financialYear: fy },
+        },
+        update: { prefix, lastNumber: nextNum },
+        create: { organizationId: orgId, sequenceType: "SALES", financialYear: fy, prefix, lastNumber: num },
+      });
+    }
+  } else {
+    invoiceNumber = await getNextSalesNumber(orgId);
+  }
 
   const processedItems = [];
   for (const item of data.items) {
-    processedItems.push(await resolveItemTax(item, data.taxMode || "NON_GST"));
+    processedItems.push(await resolveItemTax(item, taxMode));
   }
-  const totals = calculateInvoiceTotals(processedItems, data.taxMode || "NON_GST");
+  const totals = calculateInvoiceTotals(processedItems, taxMode, roundOffMode, { discount, otherCharges });
 
-  return prisma.salesInvoice.create({
-    data: {
-      organizationId: orgId,
-      invoiceNumber,
-      invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : new Date(),
-      customerId: data.customerId,
-      taxMode: data.taxMode || "NON_GST",
-      placeOfSupply: data.placeOfSupply || null,
-      workOrderNo: data.workOrderNo || null,
-      quotationReference: data.quotationReference || null,
-      ...totals,
-      status: "DRAFT",
-      createdById: user.id,
-      items: { create: processedItems },
-    },
-    include: { customer: true, items: true },
-  });
+  try {
+    return await prisma.salesInvoice.create({
+      data: {
+        organizationId: orgId,
+        invoiceNumber,
+        invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : new Date(),
+        customerId: data.customerId,
+        taxMode,
+        placeOfSupply: data.placeOfSupply || null,
+        workOrderNo: data.workOrderNo || null,
+        quotationReference: data.quotationReference || null,
+        discount,
+        otherCharges,
+        roundOffMode,
+        taxableTotal: totals.taxableTotal,
+        cgstTotal: totals.cgstTotal,
+        sgstTotal: totals.sgstTotal,
+        igstTotal: totals.igstTotal,
+        totalTax: totals.totalTax,
+        roundOff: totals.roundOff,
+        grandTotal: totals.grandTotal,
+        status: "DRAFT",
+        createdById: user.id,
+        items: { create: processedItems },
+      },
+      include: { customer: true, items: true },
+    });
+  } catch (e) {
+    if (e.code === "P2002") throw statusError(`Invoice number "${invoiceNumber}" already exists`, 400, "DUPLICATE_INVOICE_NUMBER");
+    throw e;
+  }
 }
 
 export async function updateSalesInvoice(id, organizationId, data) {
@@ -164,18 +215,31 @@ export async function updateSalesInvoice(id, organizationId, data) {
 
   if (data.items) {
     await prisma.salesItem.deleteMany({ where: { salesId: id } });
+    const taxMode = data.taxMode || existing.taxMode;
+    const roundOffMode = data.roundOffMode || existing.roundOffMode || "NEAREST";
+    const discount = data.discount !== undefined ? Number(data.discount) || 0 : Number(existing.discount) || 0;
+    const otherCharges = data.otherCharges !== undefined ? Number(data.otherCharges) || 0 : Number(existing.otherCharges) || 0;
     const processedItems = [];
     for (const item of data.items) {
-      processedItems.push(await resolveItemTax(item, data.taxMode || existing.taxMode));
+      processedItems.push(await resolveItemTax(item, taxMode));
     }
     for (const pi of processedItems) {
       await prisma.salesItem.create({ data: { ...pi, salesId: id } });
     }
-    const totals = calculateInvoiceTotals(processedItems, data.taxMode || existing.taxMode);
+    const totals = calculateInvoiceTotals(processedItems, taxMode, roundOffMode, { discount, otherCharges });
     const invoiceUpdate = {
-      ...totals,
+      taxableTotal: totals.taxableTotal,
+      cgstTotal: totals.cgstTotal,
+      sgstTotal: totals.sgstTotal,
+      igstTotal: totals.igstTotal,
+      totalTax: totals.totalTax,
+      roundOff: totals.roundOff,
+      grandTotal: totals.grandTotal,
+      discount,
+      otherCharges,
+      roundOffMode,
       customerId: data.customerId || existing.customerId,
-      taxMode: data.taxMode || existing.taxMode,
+      taxMode,
       placeOfSupply: data.placeOfSupply !== undefined ? data.placeOfSupply : existing.placeOfSupply,
       invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : existing.invoiceDate,
     };
@@ -190,6 +254,9 @@ export async function updateSalesInvoice(id, organizationId, data) {
     if (data.invoiceDate) updateData.invoiceDate = new Date(data.invoiceDate);
     if (data.workOrderNo !== undefined) updateData.workOrderNo = data.workOrderNo || null;
     if (data.quotationReference !== undefined) updateData.quotationReference = data.quotationReference || null;
+    if (data.discount !== undefined) updateData.discount = Number(data.discount) || 0;
+    if (data.otherCharges !== undefined) updateData.otherCharges = Number(data.otherCharges) || 0;
+    if (data.roundOffMode) updateData.roundOffMode = data.roundOffMode;
     if (Object.keys(updateData).length > 0) await prisma.salesInvoice.update({ where: { id }, data: updateData });
   }
 

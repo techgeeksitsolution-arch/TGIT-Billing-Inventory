@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { randomUUID } from "crypto";
 import { prisma, getOrCreateOrgAndUser } from "../db.js";
-import { calculateItemTax, calculateInvoiceTotals, roundTo2 } from "../lib/utils.js";
+import { calculateItemTax, calculateInvoiceTotals, pickTotals, roundTo2 } from "../lib/utils.js";
 import { getNextSalesNumber } from "../services/salesService.js";
 import { getNextPurchaseNumber } from "../services/purchaseService.js";
 
@@ -359,7 +359,7 @@ export async function createSalesFromGroups(groups) {
         customerId: customer.id,
         taxMode: g.taxMode,
         workOrderNo: g.workOrderNo || null,
-        ...totals,
+        ...pickTotals(totals),
         status: "DRAFT",
         createdById: user.id,
         items: { create: g.items.map((it) => ({
@@ -390,7 +390,7 @@ export async function createPurchasesFromGroups(groups) {
         supplierId: supplier.id,
         taxMode: g.taxMode,
         source: "EXCEL",
-        ...totals,
+        ...pickTotals(totals),
         status: "DRAFT",
         createdById: user.id,
         items: { create: g.items.map((it) => ({

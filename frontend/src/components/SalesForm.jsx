@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiPost, apiPut } from "../api";
+import { applyRoundOff, ROUND_OFF_MODES } from "../lib/invoiceTotals.js";
 
 const EMPTY_ITEM = { productId: "", serviceId: "", description: "", hsnSac: "", quantity: 1, unitRate: 0 };
 const TAX_MODES = [
@@ -46,6 +47,11 @@ export function SalesForm() {
     workOrderNo: "",
     taxMode: "NON_GST",
     placeOfSupply: "",
+    invoiceNumberMode: "AUTO",
+    invoiceNumber: "",
+    discount: 0,
+    otherCharges: 0,
+    roundOffMode: "NEAREST",
     items: [{ ...EMPTY_ITEM }],
   });
 
@@ -66,6 +72,11 @@ export function SalesForm() {
             workOrderNo: inv.workOrderNo || "",
             taxMode: inv.taxMode,
             placeOfSupply: inv.placeOfSupply || "",
+            invoiceNumberMode: "AUTO",
+            invoiceNumber: "",
+            discount: Number(inv.discount) || 0,
+            otherCharges: Number(inv.otherCharges) || 0,
+            roundOffMode: inv.roundOffMode || "NEAREST",
             items: inv.items?.length ? inv.items.map(i => ({
               productId: i.productId || "",
               serviceId: i.serviceId || "",
@@ -135,9 +146,10 @@ export function SalesForm() {
     { taxableTotal: 0, cgstTotal: 0, sgstTotal: 0, igstTotal: 0 }
   );
   const totalTax = totals.cgstTotal + totals.sgstTotal + totals.igstTotal;
-  const grandTotalPreRound = totals.taxableTotal + totalTax;
-  const grandTotal = Math.round(grandTotalPreRound);
-  const roundOff = Math.round((grandTotal - grandTotalPreRound) * 100) / 100;
+  const discount = Number(form.discount) || 0;
+  const otherCharges = Number(form.otherCharges) || 0;
+  const calculatedTotal = Math.round((totals.taxableTotal + totalTax + otherCharges - discount) * 100) / 100;
+  const { grandTotal, roundOff } = applyRoundOff(calculatedTotal, form.roundOffMode);
 
   const handleSave = async () => {
     setSaving(true);
@@ -149,6 +161,11 @@ export function SalesForm() {
         workOrderNo: form.workOrderNo || undefined,
         taxMode: form.taxMode,
         placeOfSupply: form.placeOfSupply || undefined,
+        discount,
+        otherCharges,
+        roundOffMode: form.roundOffMode,
+        invoiceNumberMode: form.invoiceNumberMode,
+        invoiceNumber: form.invoiceNumber || undefined,
         items: form.items.map(i => ({
           productId: i.productId || undefined,
           serviceId: i.serviceId || undefined,
@@ -209,6 +226,31 @@ export function SalesForm() {
             <input type="text" value={form.placeOfSupply} onChange={(e) => setForm({ ...form, placeOfSupply: e.target.value })} placeholder="e.g. Maharashtra" />
           </div>
         </div>
+
+        {!isEdit && (
+          <div className="form-row" style={{ marginTop: 12 }}>
+            <div className="form-group">
+              <label>Invoice Number</label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <select value={form.invoiceNumberMode} onChange={(e) => setForm({ ...form, invoiceNumberMode: e.target.value })} style={{ width: 130 }}>
+                  <option value="AUTO">Auto</option>
+                  <option value="MANUAL">Manual</option>
+                </select>
+                {form.invoiceNumberMode === "MANUAL" && (
+                  <input type="text" value={form.invoiceNumber} onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })} placeholder="e.g. TGIT/010/26-27" style={{ flex: 1 }} />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {isEdit && (
+          <div className="form-row" style={{ marginTop: 12 }}>
+            <div className="form-group">
+              <label>Invoice Number</label>
+              <input type="text" value={form.invoiceNumber} disabled readOnly placeholder="(assigned)" />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="form-card">
@@ -259,7 +301,27 @@ export function SalesForm() {
             </tbody>
           </table>
         </div>
-        <button className="btn btn-sm btn-outline" onClick={addItem}>+ Add Item</button>
+        <button className="btn btn-outline" onClick={addItem}>+ Add Item</button>
+      </div>
+
+      <div className="form-card">
+        <h3>Charges & Round Off</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Discount (₹)</label>
+            <input type="number" min="0" step="0.01" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} style={{ width: 140 }} />
+          </div>
+          <div className="form-group">
+            <label>Other Charges (₹)</label>
+            <input type="number" min="0" step="0.01" value={form.otherCharges} onChange={(e) => setForm({ ...form, otherCharges: e.target.value })} style={{ width: 140 }} />
+          </div>
+          <div className="form-group">
+            <label>Round Off Mode</label>
+            <select value={form.roundOffMode} onChange={(e) => setForm({ ...form, roundOffMode: e.target.value })} style={{ width: 180 }}>
+              {ROUND_OFF_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="totals-card">
@@ -273,6 +335,9 @@ export function SalesForm() {
             <div className="totals-row"><span>IGST:</span><span>₹{totals.igstTotal.toFixed(2)}</span></div>
           )}
           <div className="totals-row"><span>Total Tax:</span><span>₹{totalTax.toFixed(2)}</span></div>
+          <div className="totals-row"><span>Discount:</span><span>₹{discount.toFixed(2)}</span></div>
+          <div className="totals-row"><span>Other Charges:</span><span>₹{otherCharges.toFixed(2)}</span></div>
+          <div className="totals-row"><span>Calculated Total:</span><span>₹{calculatedTotal.toFixed(2)}</span></div>
           <div className="totals-row"><span>Round Off:</span><span>₹{roundOff.toFixed(2)}</span></div>
           <div className="totals-row totals-grand"><span>Grand Total:</span><span>₹{grandTotal.toLocaleString("en-IN")}.00</span></div>
         </div>
