@@ -142,7 +142,7 @@ export function NonGstBillPreview() {
                   <td>{idx + 1}</td>
                   <td>{item.description}</td>
                   <td className="r">{Number(item.price).toFixed(2)}</td>
-                  <td className="r">{Number(item.quantity)}</td>
+                  <td className="r">{Number(item.quantity)} {item.uom ? item.uom : ""}</td>
                   <td className="r bold">{Number(item.totalPrice).toFixed(2)}</td>
                 </tr>
               ))}

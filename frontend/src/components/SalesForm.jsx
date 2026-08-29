@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { apiPost, apiPut } from "../api";
 import { applyRoundOff, ROUND_OFF_MODES, taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
 
-const EMPTY_ITEM = { productId: "", serviceId: "", description: "", hsnSac: "", quantity: 1, unitRate: 0, taxRate: "" };
+const EMPTY_ITEM = { productId: "", serviceId: "", description: "", hsnSac: "", quantity: 1, unitRate: 0, taxRate: "", uom: "Nos" };
 const TAX_MODES = [
   { value: "NON_GST", label: "Non-GST" },
   { value: "INTRA_STATE_GST", label: "Intra-State GST (CGST + SGST)" },
@@ -86,6 +86,7 @@ export function SalesForm() {
               hsnSac: i.hsnSac || "",
               quantity: Number(i.quantity),
               unitRate: Number(i.unitRate),
+              uom: i.uom || "Nos",
               taxRate: Number(i.cgstRate) * 2 || Number(i.igstRate) || "",
             })) : [{ ...EMPTY_ITEM }],
           });
@@ -105,6 +106,7 @@ export function SalesForm() {
           items[index].description = product.name;
           items[index].hsnSac = product.hsnCode || "";
           items[index].unitRate = Number(product.sellingPrice);
+          items[index].uom = product.unit?.name || "Nos";
           items[index].taxRate = product.taxRate ? Number(product.taxRate.rate) : "";
         }
       }
@@ -182,6 +184,7 @@ export function SalesForm() {
           serviceId: i.serviceId || undefined,
           description: i.description,
           hsnSac: i.hsnSac,
+          uom: i.uom || "Nos",
           quantity: Number(i.quantity),
           unitRate: Number(i.unitRate),
           taxRate: i.taxRate === "" || i.taxRate == null ? undefined : Number(i.taxRate),
@@ -278,7 +281,8 @@ export function SalesForm() {
                    <th className="col-gst">GST %</th>
                    <th className="col-rate">Price (₹)</th>
                    <th className="col-qty">Qty</th>
-                  <th className="col-taxable">Taxable (₹)</th>
+                   <th className="col-uom">UOM</th>
+                   <th className="col-taxable">Taxable (₹)</th>
                   <th className="col-tax">GST (₹)</th>
                   <th className="col-total">Total (₹)</th>
                   <th className="col-action"></th>
@@ -310,6 +314,7 @@ export function SalesForm() {
                     </td>
                     <td className="col-rate"><input type="number" min="0" step="0.01" value={item.unitRate} onChange={(e) => updateItem(idx, "unitRate", e.target.value)} style={{ width: 100 }} placeholder="0.00" /></td>
                     <td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} style={{ width: 80 }} /></td>
+                    <td className="col-uom"><input type="text" list="uom-options" value={item.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} style={{ width: 90 }} placeholder="Nos" /></td>
                     <td className="col-taxable amount">{item.taxableValue.toFixed(2)}</td>
                     <td className="col-tax amount">{(item.cgstAmount + item.sgstAmount + item.igstAmount).toFixed(2)}</td>
                     <td className="col-total amount">{item.totalAmount.toFixed(2)}</td>
@@ -320,6 +325,9 @@ export function SalesForm() {
           </table>
         </div>
         <button className="btn btn-outline" onClick={addItem}>+ Add Item</button>
+        <datalist id="uom-options">
+          <option value="Nos" /><option value="Pcs" /><option value="Kg" /><option value="Mtr" /><option value="Set" /><option value="Box" /><option value="Ltr" />
+        </datalist>
       </div>
 
       <div className="form-card">

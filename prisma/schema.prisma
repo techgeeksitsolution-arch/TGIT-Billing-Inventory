@@ -382,6 +382,7 @@ model SalesItem {
   productId    String?      @db.Uuid
   serviceId    String?      @db.Uuid
   description  String
+  uom          String?      @default("Nos")
   hsnSac       String?
   quantity     Decimal      @db.Decimal(14, 3)
   unitRate     Decimal      @db.Decimal(14, 2)
@@ -446,6 +447,7 @@ model QuotationItem {
   productId     String?     @db.Uuid
   serviceId     String?     @db.Uuid
   description   String
+  uom           String?      @default("Nos")
   hsnSac        String?
   quantity      Decimal     @db.Decimal(14, 3)
   unitRate      Decimal     @db.Decimal(14, 2)
@@ -638,6 +640,7 @@ model NonGstBillItem {
   billId       String      @db.Uuid
   productId    String?     @db.Uuid
   description  String
+  uom          String?      @default("Nos")
   price        Decimal     @db.Decimal(14, 2)
   quantity     Decimal     @db.Decimal(14, 3)
   totalPrice   Decimal     @db.Decimal(14, 2)

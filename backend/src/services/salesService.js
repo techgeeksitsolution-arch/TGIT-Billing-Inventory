@@ -65,6 +65,7 @@ export async function resolveItemTax(item, taxMode) {
     productId: item.productId || null,
     serviceId: item.serviceId || null,
     description,
+    uom: item.uom || "Nos",
     hsnSac,
     quantity: item.quantity,
     unitRate: item.unitRate,

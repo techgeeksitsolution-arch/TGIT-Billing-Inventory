@@ -90,6 +90,7 @@ function buildBillItems(data) {
     return {
       productId: item.productId || null,
       description: item.description || "",
+      uom: item.uom || "Nos",
       price,
       quantity,
       totalPrice,

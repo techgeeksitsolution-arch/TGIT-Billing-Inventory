@@ -156,7 +156,7 @@ export function InvoicePreview() {
                   <td>{idx + 1}</td>
                   <td>{item.description}</td>
                   <td className="mono">{item.hsnSac || "-"}</td>
-                  <td className="r">{Number(item.quantity)}</td>
+                  <td className="r">{Number(item.quantity)} {item.uom ? item.uom : ""}</td>
                   <td className="r">{Number(item.unitRate).toFixed(2)}</td>
                   <td className="r">{Number(item.taxableValue).toFixed(2)}</td>
                   {isGST && inv.taxMode === "INTRA_STATE_GST" && <>

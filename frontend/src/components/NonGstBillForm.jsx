@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { apiPost, apiPut } from "../api";
 import { applyRoundOff, ROUND_OFF_MODES } from "../lib/invoiceTotals.js";
 
-const EMPTY_ITEM = { productId: "", description: "", price: 0, quantity: 1 };
+const EMPTY_ITEM = { productId: "", description: "", price: 0, quantity: 1, uom: "Nos" };
 
 export function NonGstBillForm() {
   const { id } = useParams();
@@ -55,6 +55,7 @@ export function NonGstBillForm() {
               description: i.description,
               price: Number(i.price),
               quantity: Number(i.quantity),
+              uom: i.uom || "Nos",
             })) : [{ ...EMPTY_ITEM }],
           });
         })
@@ -70,6 +71,7 @@ export function NonGstBillForm() {
       if (product) {
         items[index].description = product.name;
         items[index].price = Number(product.sellingPrice);
+        items[index].uom = product.unit?.name || "Nos";
       }
     }
     setForm({ ...form, items });
@@ -121,6 +123,7 @@ export function NonGstBillForm() {
         items: form.items.map(i => ({
           productId: i.productId || undefined,
           description: i.description,
+          uom: i.uom || "Nos",
           price: Number(i.price),
           quantity: Number(i.quantity),
         })),
@@ -193,6 +196,7 @@ export function NonGstBillForm() {
                 <th className="col-desc">Item Description</th>
                 <th className="col-rate">Price (₹)</th>
                 <th className="col-qty">Qty</th>
+                <th className="col-uom">UOM</th>
                 <th className="col-total">Total Price (₹)</th>
                 <th className="col-action"></th>
               </tr>
@@ -209,8 +213,9 @@ export function NonGstBillForm() {
                   </td>
                   <td className="col-desc"><input type="text" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} /></td>
                   <td className="col-rate"><input type="number" min="0" step="0.01" value={item.price} onChange={(e) => updateItem(idx, "price", e.target.value)} style={{ width: 100 }} /></td>
-                  <td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} style={{ width: 80 }} /></td>
-                  <td className="col-total amount">{item.totalPrice.toFixed(2)}</td>
+                   <td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} style={{ width: 80 }} /></td>
+                   <td className="col-uom"><input type="text" list="uom-options" value={item.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} style={{ width: 90 }} placeholder="Nos" /></td>
+                   <td className="col-total amount">{item.totalPrice.toFixed(2)}</td>
                   <td className="col-action"><button className="btn btn-sm btn-danger" onClick={() => removeItem(idx)} disabled={lineTotals.length <= 1}>x</button></td>
                 </tr>
               ))}
@@ -218,6 +223,9 @@ export function NonGstBillForm() {
           </table>
         </div>
         <button className="btn btn-sm btn-outline" onClick={addItem}>+ Add Item</button>
+        <datalist id="uom-options">
+          <option value="Nos" /><option value="Pcs" /><option value="Kg" /><option value="Mtr" /><option value="Set" /><option value="Box" /><option value="Ltr" />
+        </datalist>
       </div>
 
       <div className="form-card">
