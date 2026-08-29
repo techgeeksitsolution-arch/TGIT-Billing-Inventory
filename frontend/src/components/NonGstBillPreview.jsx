@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiPost } from "../api";
+import { Letterhead, BankDetails } from "./Letterhead.jsx";
 
 function numberToWords(num) {
   if (num === 0) return "Zero";
@@ -111,21 +112,7 @@ export function NonGstBillPreview() {
 
       <div className="invoice-print-area" id="bill-print">
         <div className="invoice-paper">
-          <div className="invoice-header-section">
-            <div className="invoice-brand">
-              <img src={profile.logoBase64 || "/TGIT.png"} alt="TGIT" className="invoice-logo" onError={(e) => { e.target.style.display = "none"; }} />
-              <div>
-                <h2 className="org-name">{profile.name}</h2>
-                <p className="org-tagline">Tech Geeks IT Solution</p>
-              </div>
-            </div>
-            <div className="invoice-title-block">
-              <h1 className="invoice-title">BILL</h1>
-              <span className="status-badge-inline" style={{ backgroundColor: b.status === "CONFIRMED" ? "#5cb85c" : b.status === "CANCELLED" ? "#d9534f" : "#f0ad4e" }}>
-                {STATUS_LABELS[b.status]}
-              </span>
-            </div>
-          </div>
+          <Letterhead profile={profile} title="BILL" status={b.status} statusLabel={STATUS_LABELS[b.status]} />
 
           <div className="invoice-meta-grid">
             <div className="meta-group">
@@ -177,6 +164,7 @@ export function NonGstBillPreview() {
           </div>
 
           <div className="invoice-bottom">
+            <BankDetails profile={profile} />
             <div className="bill-notes">
               {b.paymentMode && <p><strong>Payment Mode:</strong> {b.paymentMode}</p>}
               {b.notes && <p><strong>Notes:</strong> {b.notes}</p>}

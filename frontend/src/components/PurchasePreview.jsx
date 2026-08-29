@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
+import { Letterhead, BankDetails } from "./Letterhead.jsx";
 
 function numberToWords(num) {
   if (num === 0) return "Zero";
@@ -85,21 +86,7 @@ export default function PurchasePreview({ purchaseId, onBack, onEdit, onChanged 
 
       <div className="invoice-print-area" id="purchase-print">
         <div className="invoice-paper">
-          <div className="invoice-header-section">
-            <div className="invoice-brand">
-              <img src={profile.logoBase64 || "/TGIT.png"} alt="TGIT" className="invoice-logo" onError={(e) => { e.target.style.display = "none"; }} />
-              <div>
-                <h2 className="org-name">{profile.name}</h2>
-                <p className="org-tagline">Tech Geeks IT Solution</p>
-              </div>
-            </div>
-            <div className="invoice-title-block">
-              <h1 className="invoice-title">PURCHASE INVOICE</h1>
-              <span className="status-badge-inline" style={{ backgroundColor: inv.status === "CONFIRMED" ? "#5cb85c" : inv.status === "CANCELLED" ? "#d9534f" : "#f0ad4e" }}>
-                {STATUS_LABELS[inv.status]}
-              </span>
-            </div>
-          </div>
+          <Letterhead profile={profile} title="PURCHASE INVOICE" status={inv.status} statusLabel={STATUS_LABELS[inv.status]} />
 
           <div className="invoice-meta-grid">
             <div className="meta-group">
@@ -176,10 +163,7 @@ export default function PurchasePreview({ purchaseId, onBack, onEdit, onChanged 
           </div>
 
           <div className="invoice-bottom">
-            <div className="bank-details">
-              <h4>Bank Details</h4>
-              <p>Bank: [Your Bank Name]<br />A/C No: [Your Account Number]<br />IFSC: [Your IFSC Code]<br />Branch: [Your Branch]</p>
-            </div>
+            <BankDetails profile={profile} />
             <div className="authorized-signatory">
               <p>For {profile.name}</p>
               <div className="signature-line"></div>

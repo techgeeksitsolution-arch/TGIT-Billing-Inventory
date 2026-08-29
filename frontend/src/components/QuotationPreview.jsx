@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiPost } from "../api";
 import { taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
+import { Letterhead, BankDetails } from "./Letterhead.jsx";
 
 function numberToWords(num) {
   if (num === 0) return "Zero";
@@ -218,21 +219,7 @@ export function QuotationPreview() {
 
       <div className="invoice-print-area" id="quotation-print">
         <div className="invoice-paper">
-          <div className="invoice-header-section">
-            <div className="invoice-brand">
-              <img src={profile.logoBase64 || "/TGIT.png"} alt="TGIT" className="invoice-logo" onError={(e) => { e.target.style.display = "none"; }} />
-              <div>
-                <h2 className="org-name">{profile.name}</h2>
-                <p className="org-tagline">Tech Geeks IT Solution</p>
-              </div>
-            </div>
-            <div className="invoice-title-block">
-              <h1 className="invoice-title">QUOTATION</h1>
-              <span className="status-badge-inline" style={{ backgroundColor: q.status === "CONFIRMED" ? "#5cb85c" : q.status === "CANCELLED" ? "#d9534f" : "#f0ad4e" }}>
-                {STATUS_LABELS[q.status]}
-              </span>
-            </div>
-          </div>
+          <Letterhead profile={profile} title="QUOTATION" status={q.status} statusLabel={STATUS_LABELS[q.status]} />
 
           <div className="validity-banner">
             This quotation is valid for 1 Week from the date of issue.
@@ -319,6 +306,7 @@ export function QuotationPreview() {
           )}
 
           <div className="invoice-bottom">
+            <BankDetails profile={profile} />
             <div className="terms-conditions">
               <h4>Terms & Conditions</h4>
               {terms.length === 0 ? (
