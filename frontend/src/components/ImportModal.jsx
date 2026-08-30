@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const ENDPOINTS = {
   sales: { import: "/api/v1/sales/import", confirm: "/api/v1/sales/import/confirm", template: "/api/v1/sales/template", export: "/api/v1/sales/export", invLabel: "Invoice No", partyLabel: "Customer", rateLabel: "Rate" },
@@ -12,11 +12,17 @@ export default function ImportModal({ type, onClose, onImported }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [overrides, setOverrides] = useState({});
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (type === "purchases") fetch("/api/v1/products").then((r) => r.json()).then(setProducts).catch(() => {});
+  }, [type]);
 
   const handleFile = (e) => {
     setFile(e.target.files?.[0] || null);
-    setResult(null); setError(null); setDone(null);
+    setResult(null); setError(null); setDone(null); setOverrides({});
   };
 
   const upload = async () => {
@@ -32,11 +38,14 @@ export default function ImportModal({ type, onClose, onImported }) {
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   };
 
+  const pendingRows = (result?.rows || []).filter((r) => r.needsReview && !overrides[r.row]);
+  const canConfirm = result && (!result.hasErrors || pendingRows.length === 0);
+
   const confirmImport = async () => {
-    if (!result || result.hasErrors) return;
+    if (!canConfirm) return;
     setBusy(true); setError(null);
     try {
-      const res = await fetch(cfg.confirm, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: result.batchId }) });
+      const res = await fetch(cfg.confirm, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ batchId: result.batchId, productOverrides: overrides }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "Import failed");
       setDone(data);
@@ -51,7 +60,7 @@ export default function ImportModal({ type, onClose, onImported }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900 }}>
         <div className="modal-header">
           <h3>Import {type === "sales" ? "Sales" : "Purchases"} from Excel</h3>
           <button className="btn btn-sm" onClick={onClose}>✕</button>
@@ -74,12 +83,28 @@ export default function ImportModal({ type, onClose, onImported }) {
               <div className="import-summary">
                 <span>Total rows: <b>{result.totalRows}</b></span>
                 <span>Valid invoices: <b>{result.validGroups}</b></span>
-                {result.hasErrors && <span className="error-msg" style={{ display: "inline" }}>Validation errors present — fix and re-upload.</span>}
+                {result.hasErrors && !canConfirm && <span className="error-msg" style={{ display: "inline" }}>Resolve product matches below before importing.</span>}
               </div>
-              <div style={{ maxHeight: 340, overflow: "auto" }}>
+
+              {type === "purchases" && pendingRows.length > 0 && (
+                <div className="review-match-box">
+                  <h4>Review Product Matches ({pendingRows.length})</h4>
+                  {pendingRows.map((r) => (
+                    <div className="form-row" key={r.row} style={{ marginBottom: 6 }}>
+                      <span style={{ minWidth: 220 }}>Row {r.row}: {r.description || r.supplierInvoiceNo}</span>
+                      <select value={overrides[r.row] || ""} onChange={(e) => setOverrides({ ...overrides, [r.row]: e.target.value })}>
+                        <option value="">Select product…</option>
+                        {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.hsnCode ? ` (${p.hsnCode})` : ""}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ maxHeight: 320, overflow: "auto" }}>
                 <table className="data-table">
                   <thead>
-                    <tr><th>Row</th><th>{cfg.invLabel}</th><th>Date</th><th>{cfg.partyLabel}</th><th>Description</th><th>Qty</th><th>{cfg.rateLabel}</th><th>Errors</th></tr>
+                    <tr><th>Row</th><th>{cfg.invLabel}</th><th>Date</th><th>{cfg.partyLabel}</th><th>Description</th><th>Product</th><th>Qty</th><th>{cfg.rateLabel}</th><th>Errors</th></tr>
                   </thead>
                   <tbody>
                     {rows.map((r) => (
@@ -89,6 +114,7 @@ export default function ImportModal({ type, onClose, onImported }) {
                         <td>{r.date || "—"}</td>
                         <td>{r.customer || r.supplier || "—"}</td>
                         <td>{r.description || "—"}</td>
+                        <td>{r.productMatched ? (r.productName || "✓") : <span className="muted">needs match</span>}</td>
                         <td>{r.quantity ?? "—"}</td>
                         <td>{r.rate ?? r.unitPrice ?? "—"}</td>
                         <td>{r.errors?.length ? r.errors.join("; ") : "✓"}</td>
@@ -98,7 +124,7 @@ export default function ImportModal({ type, onClose, onImported }) {
                 </table>
               </div>
               <div style={{ marginTop: 12, textAlign: "right" }}>
-                <button className="btn btn-primary" onClick={confirmImport} disabled={result.hasErrors || busy || done}>{busy ? "Importing…" : "Import Valid Records"}</button>
+                <button className="btn btn-primary" onClick={confirmImport} disabled={!canConfirm || busy || done}>{busy ? "Importing…" : "Import Valid Records"}</button>
               </div>
             </>
           )}

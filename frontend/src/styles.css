@@ -245,3 +245,28 @@ body { min-width: 320px; }
 .success-msg { background: #e6fffa; color: #0f766e; padding: 8px 12px; border-radius: 6px; border: 1px solid #99f6e4; font-size: 0.88rem; }
 .error-msg { background: #fff5f5; color: #c0392b; padding: 8px 12px; border-radius: 6px; border: 1px solid #fecaca; font-size: 0.88rem; }
 
+.muted { color: #a0aec0; font-size: 0.82rem; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.badge.active { background: #c6f6d5; color: #276749; }
+.badge.inactive { background: #fed7d7; color: #9b2c2c; }
+.badge.paid { background: #c6f6d5; color: #276749; }
+.badge.unpaid { background: #fed7d7; color: #9b2c2c; }
+.badge.partially_paid { background: #feebc8; color: #9c4221; }
+.badge.draft { background: #e2e8f0; color: #4a5568; }
+.badge.completed { background: #c6f6d5; color: #276749; }
+.badge.awaiting_review { background: #feebc8; color: #9c4221; }
+.badge.failed { background: #fed7d7; color: #9b2c2c; }
+
+.panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+.panel h3 { margin: 0 0 12px; font-size: 1.05rem; }
+.panel h4 { margin: 12px 0 8px; font-size: 0.95rem; }
+.attachment-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.attachment-list li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #f8fafc; padding: 8px 10px; border-radius: 6px; }
+.ocr-box { margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #f8fafc; }
+.ocr-text { white-space: pre-wrap; font-size: 0.78rem; max-height: 220px; overflow: auto; background: #fff; padding: 8px; border-radius: 6px; }
+.review-match-box { border: 1px solid #fbd38d; background: #fffaf0; border-radius: 8px; padding: 12px; margin-bottom: 14px; }
+.review-match-box h4 { margin: 0 0 10px; }
+.supplier-info-box { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.82rem; color: #4a5568; background: #f8fafc; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
+.invoice-ref-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin: 10px 0; }
+@media (max-width: 700px) { .invoice-ref-grid { grid-template-columns: 1fr; } }
+

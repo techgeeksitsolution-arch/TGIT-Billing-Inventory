@@ -14,8 +14,94 @@ export const SALES_HEADERS = [
 
 export const PURCHASE_HEADERS = [
   "Supplier Invoice No", "Date", "Supplier Name", "Supplier GSTIN", "Tax Mode",
-  "HSN/SAC", "Description", "Quantity", "Unit Price", "Tax %",
+  "PO No", "Challan No", "LR No", "E-Way Bill No", "Reverse Charge",
+  "HSN/SAC", "Description", "Product SKU", "Qty", "UOM", "Unit Price", "Discount", "Tax %",
 ];
+
+const PURCHASE_FIELD_ALIASES = {
+  supplierInvoiceNo: ["Supplier Invoice No", "Voucher Number", "Bill No", "Invoice No", "Supplier Bill No", "Document No"],
+  invoiceDate: ["Date", "Voucher Date", "Invoice Date", "Bill Date"],
+  supplierName: ["Supplier Name", "Supplier Ledger Name", "Party Name", "Vendor Name"],
+  supplierGstin: ["Supplier GSTIN", "GSTIN", "Supplier GST Number", "GST No", "Party GSTIN"],
+  taxMode: ["Tax Mode", "GST Registration Type", "Registration Type"],
+  hsn: ["HSN/SAC", "HSN CODE", "HSN Code", "HSN", "SAC"],
+  description: ["Description", "Item Description", "Item", "Particulars", "Product Name"],
+  quantity: ["Quantity", "QTY", "Qty"],
+  uom: ["UOM", "Unit", "UoM"],
+  unitPrice: ["Unit Price", "Price", "Rate", "Basic Rate"],
+  discount: ["Discount", "Disc", "Line Discount"],
+  taxPct: ["Tax %", "Tax Rate", "GST %", "GST Rate"],
+  poNo: ["PO No", "PO Number", "P.O. No"],
+  challanNo: ["Challan No", "Delivery Challan No", "DC No"],
+  lrNo: ["LR No", "LR Number", "Transport Doc No", "Transport No"],
+  ewayBillNo: ["E-Way Bill No", "Eway Bill No", "EWB No"],
+  reverseCharge: ["Reverse Charge", "RCM"],
+  igstAmount: ["IGST Amount", "IGST Amt", "IGST"],
+  cgstAmount: ["CGST Amount", "CGST Amt", "CGST"],
+  sgstAmount: ["SGST Amount", "SGST Amt", "SGST"],
+  igstRate: ["IGST Rate"],
+  cgstRate: ["CGST Rate"],
+};
+
+const ALIAS_LOOKUP = {};
+for (const [field, aliases] of Object.entries(PURCHASE_FIELD_ALIASES)) {
+  for (const a of aliases) ALIAS_LOOKUP[a.toLowerCase()] = field;
+}
+
+function normalizePurchaseRow(raw) {
+  const out = {};
+  for (const [header, value] of Object.entries(raw)) {
+    const key = String(header).trim().toLowerCase();
+    const field = ALIAS_LOOKUP[key];
+    if (field && value !== undefined && value !== "") out[field] = value;
+  }
+  return out;
+}
+
+function detectTaxMode(row) {
+  if (row.taxMode) {
+    const tm = normalizeTaxMode(row.taxMode);
+    if (tm) return tm;
+  }
+  const igst = num(row.igstAmount) || 0;
+  const cgst = num(row.cgstAmount) || 0;
+  if (igst > 0) return "INTER_STATE_GST";
+  if (cgst > 0) return "INTRA_STATE_GST";
+  return "NON_GST";
+}
+
+function deriveTaxPercent(row, taxMode) {
+  if (row.taxPct != null) {
+    const t = num(row.taxPct);
+    if (t != null && t >= 0) return t;
+  }
+  if (taxMode === "INTER_STATE_GST") {
+    const r = num(row.igstRate); if (r != null) return r;
+  }
+  if (taxMode === "INTRA_STATE_GST") {
+    const r = num(row.cgstRate); if (r != null) return (r || 0) * 2;
+  }
+  return 0;
+}
+
+async function findProductByPriority(orgId, { hsn, name, sku }) {
+  if (hsn) {
+    const byHsn = await prisma.product.findFirst({ where: { organizationId: orgId, hsnCode: String(hsn).trim() } });
+    if (byHsn) return { product: byHsn, confidence: "high", source: "hsn" };
+  }
+  if (sku) {
+    const bySku = await prisma.product.findFirst({ where: { organizationId: orgId, sku: String(sku).trim() } });
+    if (bySku) return { product: bySku, confidence: "high", source: "sku" };
+  }
+  if (name) {
+    const clean = String(name).trim();
+    const byName = await prisma.product.findFirst({ where: { organizationId: orgId, name: { equals: clean, mode: "insensitive" } } });
+    if (byName) return { product: byName, confidence: "high", source: "name" };
+    const fuzzy = await prisma.product.findFirst({ where: { organizationId: orgId, name: { contains: clean, mode: "insensitive" } } });
+    if (fuzzy) return { product: fuzzy, confidence: "low", source: "fuzzy" };
+  }
+  return { product: null, confidence: null, source: null };
+}
 
 export async function readRowsFromBuffer(buffer, filename = "") {
   const wb = new ExcelJS.Workbook();
@@ -217,66 +303,85 @@ export async function validatePurchaseImport(rows) {
 
   for (const r of rows) {
     const errors = [];
-    const date = parseDate(r["Date"]);
+    const n = normalizePurchaseRow(r);
+
+    const voucherType = (r["Voucher Type"] || r["Type"] || "").toString().trim();
+    if (voucherType && !/purchase/i.test(voucherType)) continue;
+
+    const date = parseDate(n.invoiceDate);
     if (!date) errors.push("Invalid or missing Date");
-    const taxMode = normalizeTaxMode(r["Tax Mode"]);
-    if (!taxMode || !TAX_MODES.includes(taxMode)) errors.push("Invalid Tax Mode");
-    const qty = num(r["Quantity"]);
+    const taxMode = detectTaxMode(n);
+    if (!TAX_MODES.includes(taxMode)) errors.push("Invalid Tax Mode");
+    const qty = num(n.quantity);
     if (qty == null || qty <= 0) errors.push("Quantity must be > 0");
-    const price = num(r["Unit Price"]);
+    const price = num(n.unitPrice);
     if (price == null || price < 0) errors.push("Unit Price must be >= 0");
-    const taxPctRaw = num(r["Tax %"]);
+    const taxPctRaw = deriveTaxPercent(n, taxMode);
     if (taxPctRaw != null && (taxPctRaw < 0 || taxPctRaw > 100)) errors.push("Tax % must be 0-100");
-    const supplierName = (r["Supplier Name"] || "").toString().trim();
+    const supplierName = (n.supplierName || "").toString().trim();
     if (!supplierName) errors.push("Supplier Name required");
 
-    let product = null;
-    if (supplierName && date && taxMode) {
-      product = await findProduct(org.id, r["HSN/SAC"], r["Description"]);
-      if (!product) errors.push("Product not found (by HSN/SAC or Description)");
-    }
+    const match = supplierName && date && taxMode
+      ? await findProductByPriority(org.id, { hsn: n.hsn, name: n.description, sku: n.sku })
+      : { product: null, confidence: null };
+    const product = match.product;
+    const needsReview = !product || match.confidence !== "high";
+    if (!product) errors.push(`Product not found (${match.source ? "suggestion: " + match.source : "no match"})`);
 
     if (errors.length) hasErrors = true;
 
     let calc = null;
     let taxRatePercent = taxPctRaw != null ? taxPctRaw : (product?.taxRateId ? Number((await prisma.taxRate.findUnique({ where: { id: product.taxRateId } }))?.rate || 0) : 0);
     if (product && qty != null && price != null) {
-      calc = calculateItemTax({ quantity: qty, unitRate: price }, taxMode, taxRatePercent);
+      const discount = num(n.discount) || 0;
+      const taxableValue = roundTo2(qty * price - discount);
+      calc = calculateItemTax({ quantity: qty, unitRate: price, taxableValue }, taxMode, taxRatePercent);
     }
 
     const dateISO = date ? date.toISOString().slice(0, 10) : "";
-    const key = groupKey(r["Supplier Invoice No"], dateISO, supplierName);
+    const supplierInvoiceNo = (n.supplierInvoiceNo || "").toString().trim();
+    const key = groupKey(supplierInvoiceNo, dateISO, supplierName);
     if (!groupsMap.has(key)) {
       groupsMap.set(key, {
-        supplierInvoiceNo: (r["Supplier Invoice No"] || "").toString().trim(),
+        supplierInvoiceNo,
         dateISO, date,
         taxMode,
         supplierName,
-        supplierGstin: (r["Supplier GSTIN"] || "").toString().trim(),
+        supplierGstin: (n.supplierGstin || "").toString().trim(),
+        poNo: (n.poNo || "").toString().trim() || null,
+        challanNo: (n.challanNo || "").toString().trim() || null,
+        lrNo: (n.lrNo || "").toString().trim() || null,
+        ewayBillNo: (n.ewayBillNo || "").toString().trim() || null,
+        reverseCharge: /yes|y|true|1/i.test(String(n.reverseCharge || "")),
         items: [],
       });
     }
     const grp = groupsMap.get(key);
-    if (calc) {
-      grp.items.push({
-        productId: product.id,
-        description: (r["Description"] || product.name).toString().trim(),
-        hsnCode: (r["HSN/SAC"] || product.hsnCode || "").toString().trim(),
-        quantity: qty,
-        unitPrice: price,
-        ...calc,
-      });
-    }
+    grp.items.push({
+      __row: r.__row,
+      productId: product ? product.id : null,
+      needsReview,
+      description: (n.description || product?.name || "").toString().trim(),
+      hsnCode: (n.hsn || product?.hsnCode || "").toString().trim(),
+      quantity: qty,
+      unitPrice: price,
+      uom: (n.uom || "Nos").toString().trim(),
+      discount: num(n.discount) || 0,
+      ...(calc || {}),
+    });
 
     out.push({
       row: r.__row,
-      supplierInvoiceNo: (r["Supplier Invoice No"] || "").toString().trim(),
+      supplierInvoiceNo,
       date: dateISO,
       supplier: supplierName,
-      description: (r["Description"] || "").toString().trim(),
+      description: (n.description || "").toString().trim(),
       quantity: qty,
       unitPrice: price,
       taxMode,
+      productMatched: !!product,
+      productName: product?.name || null,
+      needsReview,
       errors,
     });
   }
@@ -329,10 +434,18 @@ export async function buildPurchaseExportBuffer() {
         "Supplier Name": inv.supplier?.name || "",
         "Supplier GSTIN": inv.supplier?.gstNumber || "",
         "Tax Mode": inv.taxMode,
+        "PO No": inv.poNo || "",
+        "Challan No": inv.challanNo || "",
+        "LR No": inv.lrNo || "",
+        "E-Way Bill No": inv.ewayBillNo || "",
+        "Reverse Charge": inv.reverseCharge ? "Yes" : "No",
         "HSN/SAC": it.hsnCode || "",
         Description: it.description,
-        Quantity: Number(it.quantity),
+        "Product SKU": it.product?.sku || "",
+        "Qty": Number(it.quantity),
+        "UOM": it.uom || "Nos",
         "Unit Price": Number(it.unitPrice),
+        "Discount": Number(it.discount) || 0,
         "Tax %": inv.taxMode === "INTRA_STATE_GST" ? Number(it.cgstRate) * 2 : inv.taxMode === "INTER_STATE_GST" ? Number(it.igstRate) : 0,
       });
     }
@@ -374,12 +487,18 @@ export async function createSalesFromGroups(groups) {
   return created;
 }
 
-export async function createPurchasesFromGroups(groups) {
+export async function createPurchasesFromGroups(groups, productOverrides = {}) {
   const { org, user } = await getOrCreateOrgAndUser();
   const created = [];
   for (const g of groups) {
     const supplier = await findOrCreateSupplier(org.id, g.supplierName, g.supplierGstin);
-    const totals = calculateInvoiceTotals(g.items, g.taxMode);
+    const items = g.items.map((it) => {
+      const productId = it.productId || productOverrides[String(it.__row)] || productOverrides[it.__row];
+      if (!productId) throw Object.assign(new Error(`Product not resolved for row ${it.__row} (${it.description})`), { statusCode: 400 });
+      return { ...it, productId };
+    });
+    const totals = calculateInvoiceTotals(items, g.taxMode);
+    const totalDiscount = roundTo2(items.reduce((s, i) => s + (Number(i.discount) || 0), 0));
     const internalNumber = await getNextPurchaseNumber(org.id);
     const inv = await prisma.purchaseInvoice.create({
       data: {
@@ -390,16 +509,25 @@ export async function createPurchasesFromGroups(groups) {
         supplierId: supplier.id,
         taxMode: g.taxMode,
         source: "EXCEL",
+        roundOffMode: "NEAREST",
+        reverseCharge: Boolean(g.reverseCharge),
+        poNo: g.poNo || null,
+        challanNo: g.challanNo || null,
+        lrNo: g.lrNo || null,
+        ewayBillNo: g.ewayBillNo || null,
+        discount: totalDiscount,
+        otherCharges: 0,
         ...pickTotals(totals),
         status: "DRAFT",
         createdById: user.id,
-        items: { create: g.items.map((it) => ({
-          productId: it.productId, description: it.description, hsnCode: it.hsnCode, quantity: it.quantity, unitPrice: it.unitPrice,
+        items: { create: items.map((it) => ({
+          productId: it.productId, description: it.description, hsnCode: it.hsnCode, quantity: it.quantity, unitPrice: it.unitPrice, discount: it.discount || 0, uom: it.uom || "Nos",
           taxableValue: it.taxableValue, cgstRate: it.cgstRate, cgstAmount: it.cgstAmount, sgstRate: it.sgstRate, sgstAmount: it.sgstAmount, igstRate: it.igstRate, igstAmount: it.igstAmount, totalAmount: it.totalAmount,
         })) },
       },
       include: { items: true },
     });
+    await prisma.purchaseInvoice.update({ where: { id: inv.id }, data: { paymentStatus: "UNPAID", paidAmount: 0, dueAmount: Number(inv.grandTotal) } });
     created.push(inv);
   }
   return created;

@@ -279,6 +279,21 @@ model PurchaseInvoice {
   roundOff          Decimal        @default(0) @db.Decimal(14, 2)
   roundOffMode       String?        @default("NEAREST")
   grandTotal        Decimal        @default(0) @db.Decimal(14, 2)
+  discount          Decimal        @default(0) @db.Decimal(14, 2)
+  otherCharges      Decimal        @default(0) @db.Decimal(14, 2)
+  reverseCharge     Boolean         @default(false)
+  poNo              String?
+  poDate            DateTime?
+  challanNo         String?
+  challanDate       DateTime?
+  lrNo              String?
+  ewayBillNo        String?
+  deliveryMode      String?
+  paymentMode       String?
+  paymentStatus     String?        @default("UNPAID")
+  paidAmount        Decimal        @default(0) @db.Decimal(14, 2)
+  dueAmount         Decimal        @default(0) @db.Decimal(14, 2)
+  dueDate           DateTime?
   status            DocumentStatus @default(DRAFT)
   source            ImportSource   @default(MANUAL)
   createdById       String         @db.Uuid
@@ -290,6 +305,7 @@ model PurchaseInvoice {
   items       PurchaseItem[]
   attachments PurchaseAttachment[]
   ocrJobs     OcrJob[]
+  payments    PurchasePayment[]
   createdBy   User                 @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
   confirmedBy User?                @relation("PurchaseConfirmedBy", fields: [confirmedById], references: [id])
 
@@ -302,9 +318,11 @@ model PurchaseItem {
   purchaseId   String          @db.Uuid
   productId    String          @db.Uuid
   description  String
+  uom          String?        @default("Nos")
   hsnCode      String?
   quantity     Decimal         @db.Decimal(14, 3)
   unitPrice    Decimal         @db.Decimal(14, 2)
+  discount     Decimal         @default(0) @db.Decimal(14, 2)
   taxableValue Decimal         @db.Decimal(14, 2)
   cgstRate     Decimal         @default(0) @db.Decimal(5, 2)
   cgstAmount   Decimal         @default(0) @db.Decimal(14, 2)
@@ -319,25 +337,48 @@ model PurchaseItem {
 
 model PurchaseAttachment {
   id         String          @id @default(uuid()) @db.Uuid
+  organizationId String      @db.Uuid
   purchaseId String          @db.Uuid
-  storageKey String
+  ocrJobId   String?         @db.Uuid
+  storageKey String?
   fileName   String
   mimeType   String
+  size       Int?
+  data       String?
   checksum   String?
   createdAt  DateTime        @default(now())
   purchase   PurchaseInvoice @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  ocrJob     OcrJob?         @relation(fields: [ocrJobId], references: [id], onDelete: SetNull)
+}
+
+model PurchasePayment {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  purchaseId     String         @db.Uuid
+  amount         Decimal        @db.Decimal(14, 2)
+  paymentDate    DateTime       @default(now())
+  mode           String
+  reference      String?
+  note           String?
+  createdById    String?        @db.Uuid
+  createdAt      DateTime       @default(now())
+  purchase       PurchaseInvoice @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, purchaseId])
 }
 
 model OcrJob {
-  id         String           @id @default(uuid()) @db.Uuid
-  purchaseId String?          @db.Uuid
-  provider   String
-  status     String           @default("PENDING")
-  rawResult  Json?
-  extracted  Json?
-  reviewedAt DateTime?
-  createdAt  DateTime         @default(now())
-  purchase   PurchaseInvoice? @relation(fields: [purchaseId], references: [id])
+  id           String           @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  purchaseId   String?          @db.Uuid
+  provider     String
+  status       String           @default("PENDING")
+  rawResult    Json?
+  extracted    Json?
+  reviewedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  purchase     PurchaseInvoice? @relation(fields: [purchaseId], references: [id])
+  attachments  PurchaseAttachment[] @relation
 }
 
 model SalesInvoice {

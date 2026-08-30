@@ -5,7 +5,7 @@ export function SupplierList({ onEdit, onNew }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", gstNumber: "", address: "", phone: "", mobile: "", email: "", state: "", pin: "", notes: "" });
+  const [form, setForm] = useState({ name: "", gstNumber: "", address: "", phone: "", mobile: "", email: "", state: "", pin: "", notes: "", contactPerson: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -20,12 +20,12 @@ export function SupplierList({ onEdit, onNew }) {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ name: "", gstNumber: "", address: "", phone: "", mobile: "", email: "", state: "", pin: "", notes: "" });
+    setForm({ name: "", gstNumber: "", address: "", phone: "", mobile: "", email: "", state: "", pin: "", notes: "", contactPerson: "" });
     if (onNew) onNew();
   };
   const openEdit = (s) => {
     setEditing(s.id);
-    setForm({ name: s.name, gstNumber: s.gstNumber || "", address: s.address || "", phone: s.phone || "", mobile: s.mobile || "", email: s.email || "", state: s.state || "", pin: s.pin || "", notes: s.notes || "" });
+    setForm({ name: s.name, gstNumber: s.gstNumber || "", address: s.address || "", phone: s.phone || "", mobile: s.mobile || "", email: s.email || "", state: s.state || "", pin: s.pin || "", notes: s.notes || "", contactPerson: s.contactPerson || "" });
   };
   const save = async () => {
     setSaving(true); setError(null);
@@ -39,6 +39,11 @@ export function SupplierList({ onEdit, onNew }) {
     } catch (e) { setError(e.message); } finally { setSaving(false); }
   };
 
+  const toggleStatus = async (s) => {
+    const res = await fetch(`/api/v1/suppliers/${s.id}/status`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isActive: s.isActive === false }) });
+    if (res.ok) await load();
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -50,9 +55,10 @@ export function SupplierList({ onEdit, onNew }) {
       {editing !== undefined && (
         <div className="form-card">
           <h3>{editing ? "Edit Supplier" : "New Supplier"}</h3>
-          <div className="form-row">
+           <div className="form-row">
             <div className="form-group"><label>Name *</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div className="form-group"><label>GSTIN</label><input value={form.gstNumber} onChange={(e) => setForm({ ...form, gstNumber: e.target.value })} /></div>
+            <div className="form-group"><label>Contact Person</label><input value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} /></div>
           </div>
           <div className="form-row">
             <div className="form-group"><label>Phone</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
@@ -75,16 +81,21 @@ export function SupplierList({ onEdit, onNew }) {
 
       {loading ? <p>Loading…</p> : (
         <table className="data-table">
-          <thead><tr><th>Name</th><th>GSTIN</th><th>Phone</th><th>Email</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>GSTIN</th><th>Contact</th><th>Phone</th><th>Email</th><th>Status</th><th></th></tr></thead>
           <tbody>
-            {suppliers.length === 0 && <tr><td colSpan={5}>No suppliers found.</td></tr>}
+            {suppliers.length === 0 && <tr><td colSpan={7}>No suppliers found.</td></tr>}
             {suppliers.map((s) => (
               <tr key={s.id}>
                 <td>{s.name}</td>
                 <td>{s.gstNumber || "—"}</td>
+                <td>{s.contactPerson || "—"}</td>
                 <td>{s.phone || s.mobile || "—"}</td>
                 <td>{s.email || "—"}</td>
-                <td><button className="btn btn-sm" onClick={() => openEdit(s)}>Edit</button></td>
+                <td><span className={`badge ${(s.isActive === false) ? "inactive" : "active"}`}>{(s.isActive === false) ? "Inactive" : "Active"}</span></td>
+                <td>
+                  <button className="btn btn-sm" onClick={() => openEdit(s)}>Edit</button>
+                  <button className="btn btn-sm" onClick={() => toggleStatus(s)}>{(s.isActive === false) ? "Activate" : "Deactivate"}</button>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -44,7 +44,7 @@ export function roundTo2(n) {
 export function calculateItemTax(item, taxMode, taxRatePercent) {
   const qty = Number(item.quantity);
   const rate = Number(item.unitRate);
-  const taxableValue = roundTo2(qty * rate);
+  const taxableValue = item.taxableValue != null ? roundTo2(Number(item.taxableValue)) : roundTo2(qty * rate);
   const taxRate = Number(taxRatePercent || 0);
 
   let cgstRate = 0;

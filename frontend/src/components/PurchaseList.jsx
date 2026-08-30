@@ -49,9 +49,9 @@ export function PurchaseList() {
       </div>
       {loading ? <p>Loading…</p> : (
         <table className="data-table">
-          <thead><tr><th>Internal No</th><th>Supplier Invoice</th><th>Supplier</th><th>Date</th><th>Status</th><th>Total</th><th></th></tr></thead>
+          <thead><tr><th>Internal No</th><th>Supplier Invoice</th><th>Supplier</th><th>Date</th><th>Status</th><th>Payment</th><th>Total</th><th></th></tr></thead>
           <tbody>
-            {purchases.length === 0 && <tr><td colSpan={7}>No purchases found.</td></tr>}
+            {purchases.length === 0 && <tr><td colSpan={8}>No purchases found.</td></tr>}
             {purchases.map((p) => (
               <tr key={p.id} onClick={() => { setPid(p.id); setView("preview"); }} style={{ cursor: "pointer" }}>
                 <td>{p.internalNumber}</td>
@@ -59,6 +59,7 @@ export function PurchaseList() {
                 <td>{p.supplier?.name || "—"}</td>
                 <td>{new Date(p.invoiceDate).toLocaleDateString()}</td>
                 <td>{p.status}</td>
+                <td><span className={`badge ${(p.paymentStatus || "UNPAID").toLowerCase()}`}>{p.paymentStatus || "UNPAID"}</span></td>
                 <td>{Number(p.grandTotal).toFixed(2)}</td>
                 <td><button className="btn btn-sm">View</button></td>
               </tr>
