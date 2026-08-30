@@ -92,7 +92,7 @@ function checkProviderCredentials(cfg) {
 }
 
 async function callGemini(apiKey, base64Data, mimeType) {
-  const model = "gemini-2.0-flash";
+  const model = "gemini-3.6-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const res = await fetch(url, {
@@ -445,6 +445,56 @@ function extractHsn(text) {
   return null;
 }
 
+function stripMarkdown(text) {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/`([^`]+)`/g, "$1");
+}
+
+function extractTableItems(text) {
+  const items = [];
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  let inTable = false;
+  let headerIdx = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith("|") && line.endsWith("|")) {
+      const cells = line.split("|").map(c => c.trim()).filter(c => c.length > 0);
+      if (cells.length < 3) continue;
+      if (cells.some(c => /^#|no|desc|item|product|hsn|qty|quantity|rate|amount|gst|taxable|price$/i.test(c))) {
+        inTable = true;
+        headerIdx = i;
+        continue;
+      }
+      if (inTable && cells.some(c => /^[-:]+$/.test(c))) continue;
+      if (inTable) {
+        const desc = cells[0];
+        const hsn = cells.length >= 2 ? cells[1] : null;
+        const qty = cells.length >= 3 ? cells[2] : "1";
+        const rate = cells.length >= 4 ? cells[3] : "0";
+        const taxable = cells.length >= 5 ? cells[4] : "0";
+        const gstPct = cells.length >= 6 ? cells[5] : null;
+        const amount = cells.length >= 7 ? cells[6] : cells[cells.length - 1];
+        items.push({
+          description: desc,
+          hsnCode: hsn,
+          quantity: parseFloat(qty.replace(/,/g, "")) || 1,
+          unitPrice: parseFloat(rate.replace(/,/g, "")) || 0,
+          taxableAmount: parseFloat(taxable.replace(/,/g, "")) || 0,
+          totalAmount: parseFloat(amount.replace(/,/g, "")) || 0,
+          gstPercent: gstPct,
+        });
+      }
+    } else {
+      inTable = false;
+    }
+  }
+  return items;
+}
+
 export function parseOcrText(text) {
   if (!text || !text.trim()) {
     return {
@@ -456,40 +506,45 @@ export function parseOcrText(text) {
     };
   }
 
-  const gstin = extractGstin(text);
-  const stateCode = extractStateCode(text);
-  const supplierName = findField(text, [
+  const clean = stripMarkdown(text);
+
+  const gstin = extractGstin(clean);
+  const stateCode = extractStateCode(clean);
+  const supplierName = findField(clean, [
     /(?:Supplier|Vendor|Seller|From|Sold\s*By|Billed\s*By)\s*[:.\-]?\s*(.{3,80})/i,
     /^([A-Z][A-Za-z\s&]{3,60}(?:Pvt|Ltd|LLP|Inc|Co)\.?)/m,
   ]);
-  const address = findField(text, [
+  const address = findField(clean, [
     /(?:Address|Addr)\s*[:.\-]?\s*(.{5,120})/i,
   ]);
-  const state = extractState(text);
-  const phone = findField(text, [/(?:Phone|Tel|Mobile)\s*[:.\-]?\s*([\d\s\-+]{8,15})/i]);
-  const email = findField(text, [/(?:Email|E-mail)\s*[:.\-]?\s*([\w.+-]+@[\w.-]+\.\w{2,})/i]);
+  const state = extractState(clean);
+  const phone = findField(clean, [/(?:Phone|Tel|Mobile)\s*[:.\-]?\s*([\d\s\-+]{8,15})/i]);
+  const email = findField(clean, [/(?:Email|E-mail)\s*[:.\-]?\s*([\w.+-]+@[\w.-]+\.\w{2,})/i]);
 
-  const supplierInvoiceNo = extractInvoiceNumber(text);
-  const invoiceDate = extractDate(text, [
+  const supplierInvoiceNo = extractInvoiceNumber(clean);
+  const invoiceDate = extractDate(clean, [
     /(?:Invoice\s*Date|Date\s*of\s*Invoice|Bill\s*Date)\s*[:.\-]?\s*([\d\/\-.\w\s]+)/i,
   ]);
-  const dueDate = extractDate(text, [/(?:Due\s*Date|Payment\s*Due)\s*[:.\-]?\s*([\d\/\-.\w\s]+)/i]);
-  const poNo = findField(text, [/(?:PO\s*(?:No|Number|#)|Purchase\s*Order)\s*[:.\-]?\s*([A-Z0-9][\w\/\-]+)/i]);
-  const placeOfSupply = findField(text, [/(?:Place\s*of\s*Supply|POS)\s*[:.\-]?\s*(.{3,50})/i]);
+  const dueDate = extractDate(clean, [/(?:Due\s*Date|Payment\s*Due)\s*[:.\-]?\s*([\d\/\-.\w\s]+)/i]);
+  const poNo = findField(clean, [/(?:PO\s*(?:No|Number|#)|Purchase\s*Order)\s*[:.\-]?\s*([A-Z0-9][\w\/\-]+)/i]);
+  const placeOfSupply = findField(clean, [/(?:Place\s*of\s*Supply|POS)\s*[:.\-]?\s*(.{3,50})/i]);
 
-  const items = extractItems(text);
+  let items = extractTableItems(text);
+  if (items.length === 0) {
+    items = extractItems(clean);
+  }
 
-  const taxableTotal = findAmount(text, [
-    /(?:Taxable\s*(?:Value|Amount|Total))\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
+  const taxableTotal = findAmount(clean, [
+    /(?:Taxable\s*(?:Value|Amount|Total))\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
   ]);
-  const cgstTotal = findAmount(text, [/CGST\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
-  const sgstTotal = findAmount(text, [/SGST\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
-  const igstTotal = findAmount(text, [/IGST\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
-  const grandTotal = findAmount(text, [
-    /(?:Grand\s*Total|Total\s*(?:Amount|Payable)|Amount\s*(?:Payable|Due))\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
+  const cgstTotal = findAmount(clean, [/(?:CGST|Central\s*GST)\s*(?:\([^)]*\))?\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
+  const sgstTotal = findAmount(clean, [/(?:SGST|State\s*GST)\s*(?:\([^)]*\))?\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
+  const igstTotal = findAmount(clean, [/(?:IGST|Integrated\s*GST)\s*(?:\([^)]*\))?\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
+  const grandTotal = findAmount(clean, [
+    /(?:Grand\s*Total|Total\s*(?:Amount|Payable)|Amount\s*(?:Payable|Due))\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
   ]);
-  const otherCharges = findAmount(text, [/(?:Other\s*Charges?|Freight|Shipping)\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]) || 0;
-  const roundOff = findAmount(text, [/(?:Round\s*[- ]?off)\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]) || 0;
+  const otherCharges = findAmount(clean, [/(?:Other\s*Charges?|Freight|Shipping)\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]) || 0;
+  const roundOff = findAmount(clean, [/(?:Round\s*[- ]?off)\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]) || 0;
 
   let confidence = "HIGH";
   if (!gstin && !supplierName) confidence = "LOW";
@@ -500,8 +555,13 @@ export function parseOcrText(text) {
     supplier: { name: supplierName, address, gstin, state, stateCode, phone, email },
     invoice: { supplierInvoiceNo, invoiceDate, dueDate, poNo, placeOfSupply },
     items: items.map(it => ({
-      ...it,
-      hsnCode: extractHsn(text),
+      description: it.description,
+      hsnCode: it.hsnCode || null,
+      quantity: it.quantity || 1,
+      unitPrice: it.unitPrice || 0,
+      taxableAmount: it.taxableAmount || 0,
+      totalAmount: it.totalAmount || 0,
+      gstPercent: it.gstPercent || null,
       cgstRate: 0, sgstRate: 0, igstRate: 0,
       cgstAmount: 0, sgstAmount: 0, igstAmount: 0,
       discount: 0, uom: "Nos",
