@@ -37,7 +37,11 @@ customersRouter.post("/", async (req, res, next) => {
         gstNumber: req.body.gstNumber || null,
         address: req.body.address || null,
         phone: req.body.phone || null,
+        mobile: req.body.mobile || null,
         email: req.body.email || null,
+        state: req.body.state || null,
+        pin: req.body.pin || null,
+        notes: req.body.notes || null,
       },
     });
     res.status(201).json(customer);
@@ -59,7 +63,11 @@ customersRouter.put("/:id", async (req, res, next) => {
         gstNumber: req.body.gstNumber !== undefined ? req.body.gstNumber : customer.gstNumber,
         address: req.body.address !== undefined ? req.body.address : customer.address,
         phone: req.body.phone !== undefined ? req.body.phone : customer.phone,
+        mobile: req.body.mobile !== undefined ? req.body.mobile : customer.mobile,
         email: req.body.email !== undefined ? req.body.email : customer.email,
+        state: req.body.state !== undefined ? req.body.state : customer.state,
+        pin: req.body.pin !== undefined ? req.body.pin : customer.pin,
+        notes: req.body.notes !== undefined ? req.body.notes : customer.notes,
       },
     });
     res.json(updated);

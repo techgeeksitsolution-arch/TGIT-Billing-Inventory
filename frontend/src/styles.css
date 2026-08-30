@@ -270,3 +270,14 @@ body { min-width: 320px; }
 .invoice-ref-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin: 10px 0; }
 @media (max-width: 700px) { .invoice-ref-grid { grid-template-columns: 1fr; } }
 
+.inline-quick-add { display: flex; gap: 6px; align-items: flex-end; }
+.inline-quick-add select { flex: 1; }
+
+.quick-add-modal { max-width: 520px; }
+.quick-add-modal .form-group { margin-bottom: 8px; }
+.quick-add-modal .form-group label { font-size: 0.82rem; margin-bottom: 2px; }
+.quick-add-modal .form-group input { width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.88rem; }
+.quick-add-modal .form-row { gap: 10px; }
+.quick-add-actions { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+.warning-msg { background: #fff3cd; color: #856404; padding: 8px 12px; border-radius: 6px; border: 1px solid #ffc107; font-size: 0.85rem; margin-bottom: 12px; }
+

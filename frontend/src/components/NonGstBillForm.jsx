@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiPost, apiPut } from "../api";
 import { applyRoundOff, ROUND_OFF_MODES } from "../lib/invoiceTotals.js";
+import QuickAddCustomer from "./QuickAddCustomer.jsx";
 
 const EMPTY_ITEM = { productId: "", description: "", price: 0, quantity: 1, uom: "Nos" };
 
@@ -14,6 +15,7 @@ export function NonGstBillForm() {
   const [products, setProducts] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   const [form, setForm] = useState({
     customerId: "",
@@ -155,10 +157,13 @@ export function NonGstBillForm() {
         <div className="form-row">
           <div className="form-group">
             <label>Customer (optional)</label>
-            <select value={form.customerId} onChange={(e) => handleCustomerSelect(e.target.value)}>
-              <option value="">-- Walk-in / Manual --</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <div className="inline-quick-add">
+              <select value={form.customerId} onChange={(e) => handleCustomerSelect(e.target.value)}>
+                <option value="">-- Walk-in / Manual --</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button type="button" className="btn btn-sm btn-outline" onClick={() => setShowQuickAdd(true)}>+ Add New Customer</button>
+            </div>
           </div>
           <div className="form-group">
             <label>Bill Date</label>
@@ -269,6 +274,18 @@ export function NonGstBillForm() {
         </button>
         <button className="btn btn-outline" onClick={() => navigate("/nongst")}>Cancel</button>
       </div>
+
+      {showQuickAdd && (
+        <QuickAddCustomer
+          existingCustomers={customers}
+          onCreated={(c) => {
+            setCustomers(prev => [...prev, c]);
+            setForm({ ...form, customerId: c.id, customerName: c.name || "", customerPhone: c.phone || "", customerAddress: c.address || "" });
+            setShowQuickAdd(false);
+          }}
+          onClose={() => setShowQuickAdd(false)}
+        />
+      )}
     </div>
   );
 }

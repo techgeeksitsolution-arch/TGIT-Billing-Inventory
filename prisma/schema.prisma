@@ -219,7 +219,11 @@ model Customer {
   gstNumber      String?
   address        String?
   phone          String?
+  mobile         String?
   email          String?
+  state          String?
+  pin            String?
+  notes          String?
   isActive       Boolean        @default(true)
   organization   Organization   @relation(fields: [organizationId], references: [id])
   salesInvoices  SalesInvoice[]

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
+import QuickAddSupplier from "./QuickAddSupplier.jsx";
 
 const roundTo2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -31,6 +32,7 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
   const [supplierId, setSupplierId] = useState("");
   const [supplierInfo, setSupplierInfo] = useState(null);
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
   const [taxMode, setTaxMode] = useState("NON_GST");
   const [placeOfSupply, setPlaceOfSupply] = useState("");
@@ -165,10 +167,13 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
       <div className="form-card">
         <div className="form-row">
           <div className="form-group"><label>Supplier *</label>
-            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-              <option value="">Select supplier</option>
-              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.isActive === false ? " (inactive)" : ""}</option>)}
-            </select>
+            <div className="inline-quick-add">
+              <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+                <option value="">Select supplier</option>
+                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.isActive === false ? " (inactive)" : ""}</option>)}
+              </select>
+              <button type="button" className="btn btn-sm btn-outline" onClick={() => setShowQuickAdd(true)}>+ Add New Supplier</button>
+            </div>
           </div>
           <div className="form-group"><label>Supplier Invoice No</label><input value={supplierInvoiceNo} onChange={(e) => setSupplierInvoiceNo(e.target.value)} /></div>
           <div className="form-group"><label>Date</label><input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} /></div>
@@ -294,6 +299,14 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
         <button className="btn btn-primary" onClick={save} disabled={saving || !supplierId}>Save as Draft</button>
         <button className="btn" onClick={() => onSaved && onSaved(null)}>Cancel</button>
       </div>
+
+      {showQuickAdd && (
+        <QuickAddSupplier
+          existingSuppliers={suppliers}
+          onCreated={(s) => { setSuppliers(prev => [...prev, s]); setSupplierId(s.id); setShowQuickAdd(false); }}
+          onClose={() => setShowQuickAdd(false)}
+        />
+      )}
     </div>
   );
 }
