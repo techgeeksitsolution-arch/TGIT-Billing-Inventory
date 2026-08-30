@@ -1,23 +1,28 @@
 import { useState, useEffect } from "react";
-import { apiPost } from "../api";
+import { apiGet, apiPost } from "../api";
 
 export function ProductList() {
   const [products, setProducts] = useState([]);
   const [taxRates, setTaxRates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", sku: "", sellingPrice: "", purchasePrice: "", currentStock: "", hsnCode: "", taxRateId: "" });
   const [saving, setSaving] = useState(false);
 
   const loadProducts = () => {
-    fetch("/api/v1/products")
-      .then(r => {
-        if (!r.ok) throw new Error(`Products API returned ${r.status}`);
-        return r.json();
+    setLoadError(null);
+    apiGet("/products")
+      .then(data => {
+        setProducts(Array.isArray(data) ? data : []);
+        setLoading(false);
       })
-      .then(data => { setProducts(data); setLoading(false); })
-      .catch(e => { setError(e.message); setLoading(false); });
+      .catch(e => {
+        setProducts([]);
+        setLoadError(e.message || "Unable to load products");
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -77,6 +82,12 @@ export function ProductList() {
 
       {loading && <div className="loading">Loading...</div>}
       {error && !showForm && <div className="error-msg">{error}</div>}
+      {loadError && (
+        <div className="error-msg">
+          Unable to load products — {loadError}{" "}
+          <button className="btn btn-sm" onClick={() => { setLoading(true); loadProducts(); }}>Retry</button>
+        </div>
+      )}
 
       {!loading && (
         <div className="table-container">
@@ -93,7 +104,13 @@ export function ProductList() {
               </tr>
             </thead>
             <tbody>
-              {products.length === 0 && <tr><td colSpan="7" className="empty-state">No products yet</td></tr>}
+              {products.length === 0 && (
+                <tr>
+                  <td colSpan="7" className="empty-state">
+                    {loadError ? "Could not load products" : "No products yet"}
+                  </td>
+                </tr>
+              )}
               {products.map(p => (
                 <tr key={p.id}>
                   <td><strong>{p.name}</strong></td>

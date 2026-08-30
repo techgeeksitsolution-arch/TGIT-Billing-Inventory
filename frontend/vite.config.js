@@ -8,7 +8,24 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:4000"
-    }
+      "/api": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+        // Without this, a down/crashed backend makes the proxy emit HTTP 500
+        // with an EMPTY body, which breaks every response.json() in the app.
+        configure: (proxy) => {
+          proxy.on("error", (err, _req, res) => {
+            if (!res || res.headersSent || typeof res.writeHead !== "function") return;
+            res.writeHead(502, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({
+              error: {
+                code: "BACKEND_UNAVAILABLE",
+                message: `Backend not reachable at http://localhost:4000 (${err.code || err.message}). Is it running?`,
+              },
+            }));
+          });
+        },
+      },
+    },
   }
 });

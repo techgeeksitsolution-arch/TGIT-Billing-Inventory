@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { apiPost } from "../api";
+import { apiGet, apiPost } from "../api";
 import { taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
 import { formatDate } from "../lib/format.js";
 import { Letterhead, BankDetails } from "./Letterhead.jsx";
@@ -47,11 +47,10 @@ export function InvoicePreview() {
   const [profile, setProfile] = useState({ name: "Tech Geeks IT Solution" });
 
   useEffect(() => {
-    fetch(`/api/v1/sales/${id}`)
-      .then(r => { if (!r.ok) throw new Error("Not found"); return r.json(); })
+    apiGet(`/sales/${id}`)
       .then(data => { setInvoice(data); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
-    fetch("/api/v1/settings/company-profile").then(r => r.json()).then(setProfile).catch(() => {});
+    apiGet("/settings/company-profile").then(setProfile).catch(() => {});
   }, [id]);
 
   const handleFinalize = async () => {

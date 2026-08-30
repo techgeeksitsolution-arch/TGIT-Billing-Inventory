@@ -2,6 +2,55 @@ import { useState, useEffect } from "react";
 
 const API = "/api/v1";
 
+/**
+ * Reads a Response safely. Never calls res.json() blindly: a crashed backend
+ * (or a dev-server proxy with no upstream) returns an empty body, and
+ * res.json() then throws the useless
+ * "Failed to execute 'json' on 'Response': Unexpected end of JSON input".
+ * Returns { ok, status, data, errorMessage }.
+ */
+async function readResponse(res) {
+  const text = await res.text().catch(() => "");
+
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+  }
+
+  if (res.ok) {
+    if (data === null) {
+      return {
+        ok: false,
+        status: res.status,
+        data: null,
+        errorMessage: `Server returned HTTP ${res.status} with an invalid or empty body`,
+      };
+    }
+    return { ok: true, status: res.status, data, errorMessage: null };
+  }
+
+  const errorMessage =
+    data?.error?.message ||
+    (text ? `HTTP ${res.status}: ${text.slice(0, 200)}` : null) ||
+    (res.status >= 500
+      ? `Server error (HTTP ${res.status}). The backend may be down — check it is running on port 4000.`
+      : `Request failed (HTTP ${res.status} ${res.statusText || ""})`.trim());
+
+  return { ok: false, status: res.status, data, errorMessage };
+}
+
+function toError({ status, data, errorMessage }) {
+  const err = new Error(errorMessage);
+  err.status = status;
+  if (data?.error?.code) err.code = data.error.code;
+  if (data?.error?.details) err.details = data.error.details;
+  return err;
+}
+
 export function useFetch(url, options) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -12,12 +61,9 @@ export function useFetch(url, options) {
     setError(null);
     try {
       const res = await fetch(`${API}${url}`, options);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-        throw new Error(err.error?.message || "Request failed");
-      }
-      const json = await res.json();
-      setData(json);
+      const parsed = await readResponse(res);
+      if (!parsed.ok) throw toError(parsed);
+      setData(parsed.data);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -32,20 +78,22 @@ export function useFetch(url, options) {
   return { data, loading, error, refetch };
 }
 
+export async function apiGet(url) {
+  const res = await fetch(`${API}${url}`);
+  const parsed = await readResponse(res);
+  if (!parsed.ok) throw toError(parsed);
+  return parsed.data;
+}
+
 export async function apiPost(url, body) {
   const res = await fetch(`${API}${url}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const json = await res.json();
-  if (!res.ok) {
-    const err = new Error(json.error?.message || "Request failed");
-    if (json.error?.code) err.code = json.error.code;
-    if (json.error?.details) err.details = json.error.details;
-    throw err;
-  }
-  return json;
+  const parsed = await readResponse(res);
+  if (!parsed.ok) throw toError(parsed);
+  return parsed.data;
 }
 
 export async function apiPut(url, body) {
@@ -54,7 +102,7 @@ export async function apiPut(url, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error?.message || "Request failed");
-  return json;
+  const parsed = await readResponse(res);
+  if (!parsed.ok) throw toError(parsed);
+  return parsed.data;
 }
