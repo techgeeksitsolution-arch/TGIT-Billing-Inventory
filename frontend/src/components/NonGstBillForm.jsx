@@ -217,9 +217,9 @@ export function NonGstBillForm() {
                     </select>
                   </td>
                   <td className="col-desc"><input type="text" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} /></td>
-                  <td className="col-rate"><input type="number" min="0" step="0.01" value={item.price} onChange={(e) => updateItem(idx, "price", e.target.value)} style={{ width: 100 }} /></td>
-                   <td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} style={{ width: 80 }} /></td>
-                   <td className="col-uom"><input type="text" list="uom-options" value={item.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} style={{ width: 90 }} placeholder="Nos" /></td>
+<td className="col-rate"><input type="number" min="0" step="0.01" value={item.price} onChange={(e) => updateItem(idx, "price", e.target.value)} /></td>
+                    <td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} /></td>
+                    <td className="col-uom"><input type="text" list="uom-options" value={item.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} placeholder="Nos" /></td>
                    <td className="col-total amount">{item.totalPrice.toFixed(2)}</td>
                   <td className="col-action"><button className="btn btn-sm btn-danger" onClick={() => removeItem(idx)} disabled={lineTotals.length <= 1}>x</button></td>
                 </tr>

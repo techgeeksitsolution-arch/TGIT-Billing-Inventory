@@ -24,10 +24,13 @@ body { min-width: 320px; }
 .nav-link:hover { background: rgba(255,255,255,0.1); color: #fff; }
 .nav-link.active { background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; }
 .nav-icon { font-size: 1.1rem; }
-.main-content { flex: 1; padding: 24px 32px; overflow-y: auto; }
+/* min-width:0 is what stops a wide table from forcing the whole flex layout
+   wider than the window. Without it a flex child refuses to shrink below its
+   content, which pushed the page sideways and cut off the right-hand buttons. */
+.main-content { flex: 1; min-width: 0; padding: 24px 32px; overflow-y: auto; }
 
 /* Page */
-.page { max-width: 1200px; }
+.page { max-width: 1400px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .page-header h1 { font-size: 1.5rem; }
 .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -93,20 +96,34 @@ body { min-width: 320px; }
 }
 
 /* Items table */
+/* Item entry grid.
+   The table keeps a comfortable minimum width and the container scrolls
+   horizontally, so narrow windows produce a scrollbar instead of crushing
+   every field into an unusable sliver. Widths live here rather than as inline
+   styles on the inputs, otherwise the inputs stay fixed-size no matter how
+   much room the column actually has. */
 .items-table-container { overflow-x: auto; margin-bottom: 12px; }
-.items-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; }
+.items-table { width: 100%; min-width: 1080px; border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; }
 .items-table th { background: #f8fafc; padding: 6px 8px; text-align: left; font-size: 0.75rem; font-weight: 700; color: #486581; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
-.items-table td { padding: 4px 6px; border-bottom: 1px solid #edf2f7; }
-.items-table input, .items-table select { padding: 4px 6px; border: 1px solid #d9e2ec; border-radius: 4px; font-size: 0.82rem; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
+.items-table td { padding: 6px; border-bottom: 1px solid #edf2f7; vertical-align: top; }
+.items-table input, .items-table select { padding: 5px 7px; border: 1px solid #d9e2ec; border-radius: 4px; font-size: 0.82rem; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
 .items-table .amount, .items-table .r { text-align: right; }
-.col-idx { width: 40px; }
-.col-type { min-width: 160px; }
-.col-desc { min-width: 160px; }
-.col-hsn { width: 90px; }
-.col-qty { width: 80px; }
-.col-rate { width: 100px; }
-.col-taxable, .col-tax, .col-total { width: 100px; }
-.col-action { width: 40px; }
+
+/* Long product names and descriptions wrap onto further lines and the row
+   grows with them, rather than being clipped or overlapping a neighbour. */
+.items-table .col-type, .items-table .col-desc { white-space: normal; overflow-wrap: anywhere; }
+.items-table textarea { resize: vertical; }
+
+.col-idx { width: 36px; }
+.col-type { width: 20%; min-width: 170px; }
+.col-desc { width: 22%; min-width: 180px; }
+.col-hsn { width: 96px; }
+.col-gst { width: 84px; }
+.col-rate { width: 104px; }
+.col-qty { width: 84px; }
+.col-uom { width: 88px; }
+.col-taxable, .col-tax, .col-total { width: 104px; }
+.col-action { width: 44px; }
 
 /* Totals */
 .totals-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; display: flex; justify-content: flex-end; }
@@ -284,3 +301,57 @@ body { min-width: 320px; }
 .quick-add-actions { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
 .warning-msg { background: #fff3cd; color: #856404; padding: 8px 12px; border-radius: 6px; border: 1px solid #ffc107; font-size: 0.85rem; margin-bottom: 12px; }
 
+
+/* ============================================================
+   Responsive / window-size compatibility
+   Applies to every screen: lists, forms, previews and modals.
+   Fonts are not shrunk; layout reflows and wide grids scroll.
+   ============================================================ */
+
+/* Any table can scroll rather than push the layout sideways. */
+.table-container, .items-table-container { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Action buttons wrap instead of being clipped at the right edge. */
+.actions-cell { display: flex; gap: 4px; flex-wrap: wrap; }
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Modals stay inside the viewport on short or scaled displays. */
+.modal-content { max-width: min(960px, calc(100vw - 32px)); }
+.modal-body { overflow-x: auto; }
+
+/* Laptop widths: reclaim space from the sidebar and page padding. */
+@media (max-width: 1400px) {
+  .main-content { padding: 20px 24px; }
+}
+
+@media (max-width: 1100px) {
+  .sidebar { width: 200px; min-width: 200px; }
+  .main-content { padding: 16px 18px; }
+  .form-row { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+}
+
+/* Narrow windows: sidebar moves to the top and forms become single column. */
+@media (max-width: 860px) {
+  .app-layout { flex-direction: column; }
+  .sidebar { width: 100%; min-width: 0; flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .nav-links { display: flex; flex-wrap: wrap; padding: 6px; flex: 1 1 100%; }
+  .nav-link { padding: 8px 12px; }
+  .main-content { padding: 14px; height: auto; }
+  .page-header { align-items: flex-start; }
+  .form-row { grid-template-columns: 1fr; }
+  .totals-box, .invoice-bottom { width: 100%; }
+}
+
+/* High-DPI / OS scaling: keep controls tappable and readable. */
+@media (min-resolution: 1.5dppx) {
+  .btn-sm { padding: 5px 10px; }
+  .items-table input, .items-table select { padding: 6px 8px; }
+}
+
+/* Print / preview: let the document use the full sheet. */
+@media print {
+  .page { max-width: none; }
+  .items-table, .invoice-items-table { min-width: 0; }
+  .table-container, .items-table-container { overflow: visible; }
+}

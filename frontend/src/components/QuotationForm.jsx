@@ -306,16 +306,16 @@ export function QuotationForm() {
                     </select>
                   </td>
                   <td className="col-desc"><input type="text" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} /></td>
-                   <td className="col-hsn"><input type="text" value={item.hsnSac} onChange={(e) => updateItem(idx, "hsnSac", e.target.value)} style={{ width: 80 }} /></td>
-                   <td className="col-gst">
-                     <select value={item.taxRate === "" || item.taxRate == null ? "" : String(item.taxRate)} onChange={(e) => updateItem(idx, "taxRate", e.target.value === "" ? "" : Number(e.target.value))} style={{ width: 80 }}>
+<td className="col-hsn"><input type="text" value={item.hsnSac} onChange={(e) => updateItem(idx, "hsnSac", e.target.value)} /></td>
+                    <td className="col-gst">
+                      <select value={item.taxRate === "" || item.taxRate == null ? "" : String(item.taxRate)} onChange={(e) => updateItem(idx, "taxRate", e.target.value === "" ? "" : Number(e.target.value))}>
                        <option value="">Auto</option>
                        {taxRates.map(t => <option key={t.id} value={String(t.rate)}>{t.rate}%</option>)}
                      </select>
                    </td>
-                    <td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} style={{ width: 80 }} /></td>
-                    <td className="col-uom"><input type="text" list="uom-options" value={item.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} style={{ width: 90 }} placeholder="Nos" /></td>
-                   <td className="col-rate"><input type="number" min="0" step="0.01" value={item.unitRate} onChange={(e) => updateItem(idx, "unitRate", e.target.value)} style={{ width: 100 }} /></td>
+<td className="col-qty"><input type="number" min="0" step="0.001" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} /></td>
+                    <td className="col-uom"><input type="text" list="uom-options" value={item.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} placeholder="Nos" /></td>
+                    <td className="col-rate"><input type="number" min="0" step="0.01" value={item.unitRate} onChange={(e) => updateItem(idx, "unitRate", e.target.value)} /></td>
                   <td className="col-taxable amount">{item.taxableValue.toFixed(2)}</td>
                   <td className="col-tax amount">{(item.cgstAmount + item.sgstAmount + item.igstAmount).toFixed(2)}</td>
                   <td className="col-total amount">{item.totalAmount.toFixed(2)}</td>
