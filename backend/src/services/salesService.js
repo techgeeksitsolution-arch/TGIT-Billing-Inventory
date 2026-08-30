@@ -264,7 +264,7 @@ export async function updateSalesInvoice(id, organizationId, data) {
   return getSalesInvoice(id, organizationId);
 }
 
-export async function finalizeSalesInvoice(id, organizationId) {
+export async function finalizeSalesInvoice(id, organizationId, opts = {}) {
   const existing = await prisma.salesInvoice.findFirst({
     where: { id, organizationId },
     include: { items: true },
@@ -276,7 +276,7 @@ export async function finalizeSalesInvoice(id, organizationId) {
   const orgId = org.id;
 
   const stockWarnings = await checkStockAvailability(existing.items);
-  if (stockWarnings.length > 0) {
+  if (stockWarnings.length > 0 && !opts.stockOverride) {
     const err = new Error("Insufficient stock for finalization");
     err.statusCode = 400;
     err.code = "INSUFFICIENT_STOCK";
@@ -294,6 +294,10 @@ export async function finalizeSalesInvoice(id, organizationId) {
 
       await tx.product.update({ where: { id: item.productId }, data: { currentStock: stockAfter } });
 
+      const movementNotes = opts.stockOverride
+        ? `Sale (override): Invoice ${existing.invoiceNumber} — ${opts.overrideReason || "No reason"}`
+        : `Sale: Invoice ${existing.invoiceNumber}`;
+
       await tx.stockMovement.create({
         data: {
           organizationId: orgId,
@@ -305,15 +309,24 @@ export async function finalizeSalesInvoice(id, organizationId) {
           quantityOut: qty,
           stockBefore,
           stockAfter,
-          notes: `Sale: Invoice ${existing.invoiceNumber}`,
+          notes: movementNotes,
           createdById: user.id,
         },
       });
     }
 
+    const updateData = { status: "CONFIRMED", finalizedById: user.id };
+    if (opts.stockOverride) {
+      updateData.stockOverride = true;
+      updateData.stockOverrideReason = opts.overrideReason || null;
+      updateData.stockOverrideData = opts.stockOverrideData ? JSON.stringify(opts.stockOverrideData) : null;
+      updateData.stockOverrideUserId = user.id;
+      updateData.stockOverrideTimestamp = new Date();
+    }
+
     return tx.salesInvoice.update({
       where: { id },
-      data: { status: "CONFIRMED", finalizedById: user.id },
+      data: updateData,
       include: { customer: true, items: true },
     });
   });

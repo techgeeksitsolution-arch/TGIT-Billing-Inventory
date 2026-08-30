@@ -408,6 +408,11 @@ model SalesInvoice {
   status         DocumentStatus @default(DRAFT)
   createdById    String         @db.Uuid
   finalizedById  String?        @db.Uuid
+  stockOverride         Boolean        @default(false)
+  stockOverrideReason   String?
+  stockOverrideData     String?
+  stockOverrideUserId   String?        @db.Uuid
+  stockOverrideTimestamp DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 

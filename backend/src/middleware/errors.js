@@ -10,10 +10,12 @@ export function notFound(req, res) {
 export function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
   console.error(error);
-  res.status(error.statusCode || 500).json({
+  const payload = {
     error: {
       code: error.code || "INTERNAL_SERVER_ERROR",
       message: error.statusCode ? error.message : "An unexpected error occurred"
     }
-  });
+  };
+  if (error.details) payload.error.details = error.details;
+  res.status(error.statusCode || 500).json(payload);
 }

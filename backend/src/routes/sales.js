@@ -115,7 +115,13 @@ salesRouter.put("/:id", async (req, res, next) => {
 salesRouter.post("/:id/finalize", async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
-    const invoice = await finalizeSalesInvoice(req.params.id, org.id);
+    const opts = {};
+    if (req.body.stockOverride) {
+      opts.stockOverride = true;
+      opts.overrideReason = req.body.overrideReason || null;
+      opts.stockOverrideData = req.body.stockOverrideData || null;
+    }
+    const invoice = await finalizeSalesInvoice(req.params.id, org.id, opts);
     res.json(invoice);
   } catch (e) { next(e); }
 });

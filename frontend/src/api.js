@@ -39,7 +39,12 @@ export async function apiPost(url, body) {
     body: JSON.stringify(body),
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error?.message || "Request failed");
+  if (!res.ok) {
+    const err = new Error(json.error?.message || "Request failed");
+    if (json.error?.code) err.code = json.error.code;
+    if (json.error?.details) err.details = json.error.details;
+    throw err;
+  }
   return json;
 }
 

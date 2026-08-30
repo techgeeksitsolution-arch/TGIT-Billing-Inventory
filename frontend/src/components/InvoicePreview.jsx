@@ -4,6 +4,7 @@ import { apiPost } from "../api";
 import { taxPercent, fmtPercent } from "../lib/invoiceTotals.js";
 import { formatDate } from "../lib/format.js";
 import { Letterhead, BankDetails } from "./Letterhead.jsx";
+import StockOverrideModal from "./StockOverrideModal.jsx";
 
 function numberToWords(num) {
   if (num === 0) return "Zero";
@@ -42,6 +43,7 @@ export function InvoicePreview() {
   const [finalizing, setFinalizing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState(null);
+  const [stockWarnings, setStockWarnings] = useState(null);
   const [profile, setProfile] = useState({ name: "Tech Geeks IT Solution" });
 
   useEffect(() => {
@@ -58,6 +60,28 @@ export function InvoicePreview() {
     setError(null);
     try {
       const result = await apiPost(`/sales/${id}/finalize`);
+      setInvoice(result);
+    } catch (e) {
+      if (e.code === "INSUFFICIENT_STOCK" && e.details) {
+        setStockWarnings(e.details);
+      } else {
+        setError(e.message);
+      }
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
+  const handleOverrideConfirm = async (reason) => {
+    setStockWarnings(null);
+    setFinalizing(true);
+    setError(null);
+    try {
+      const result = await apiPost(`/sales/${id}/finalize`, {
+        stockOverride: true,
+        overrideReason: reason,
+        stockOverrideData: stockWarnings,
+      });
       setInvoice(result);
     } catch (e) {
       setError(e.message);
@@ -115,6 +139,12 @@ export function InvoicePreview() {
       <div className="invoice-print-area" id="invoice-print">
         <div className="invoice-paper">
           <Letterhead profile={profile} title="TAX INVOICE" status={inv.status} statusLabel={STATUS_LABELS[inv.status]} />
+
+          {inv.stockOverride && (
+            <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 6, padding: "6px 12px", marginBottom: 12, fontSize: "0.82rem" }}>
+              <strong>Stock Override:</strong> {inv.stockOverrideReason || "No reason specified"}
+            </div>
+          )}
 
           <div className="invoice-meta-grid">
             <div className="meta-group">
@@ -204,6 +234,14 @@ export function InvoicePreview() {
           </div>
         </div>
       </div>
+
+      {stockWarnings && (
+        <StockOverrideModal
+          stockWarnings={stockWarnings}
+          onConfirm={handleOverrideConfirm}
+          onCancel={() => setStockWarnings(null)}
+        />
+      )}
     </div>
   );
 }
