@@ -43,6 +43,7 @@ export function SalesForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [customerInfo, setCustomerInfo] = useState(null);
 
   const [form, setForm] = useState({
     customerId: "",
@@ -96,6 +97,13 @@ export function SalesForm() {
         .catch(e => setError(e.message));
     }
   }, [id, isEdit]);
+
+  useEffect(() => {
+    if (!form.customerId) { setCustomerInfo(null); return; }
+    const found = customers.find(c => c.id === form.customerId);
+    if (found) { setCustomerInfo(found); return; }
+    fetch(`/api/v1/customers/${form.customerId}`).then(r => r.json()).then(setCustomerInfo).catch(() => {});
+  }, [form.customerId, customers]);
 
   const updateItem = (index, field, value) => {
     const items = [...form.items];
@@ -227,6 +235,17 @@ export function SalesForm() {
               <button type="button" className="btn btn-sm btn-outline" onClick={() => setShowQuickAdd(true)}>+ Add New Customer</button>
             </div>
           </div>
+          {customerInfo && (
+            <div className="supplier-info-box">
+              {customerInfo.name && <span><strong>Name:</strong> {customerInfo.name}</span>}
+              {customerInfo.phone && <span><strong>Phone:</strong> {customerInfo.phone}</span>}
+              {customerInfo.mobile && <span><strong>Mobile:</strong> {customerInfo.mobile}</span>}
+              {customerInfo.email && <span><strong>Email:</strong> {customerInfo.email}</span>}
+              {customerInfo.gstNumber && <span><strong>GSTIN:</strong> {customerInfo.gstNumber}</span>}
+              {customerInfo.address && <span><strong>Address:</strong> {customerInfo.address}</span>}
+              {customerInfo.state && <span><strong>State:</strong> {customerInfo.state}</span>}
+            </div>
+          )}
           <div className="form-group">
             <label>Invoice Date</label>
             <input type="date" value={form.invoiceDate} onChange={(e) => setForm({ ...form, invoiceDate: e.target.value })} />
@@ -384,7 +403,7 @@ export function SalesForm() {
       {showQuickAdd && (
         <QuickAddCustomer
           existingCustomers={customers}
-          onCreated={(c) => { setCustomers(prev => [...prev, c]); setForm({ ...form, customerId: c.id }); setShowQuickAdd(false); }}
+          onCreated={(c) => { setCustomers(prev => [...prev, c]); setForm({ ...form, customerId: c.id }); setCustomerInfo(c); setShowQuickAdd(false); }}
           onClose={() => setShowQuickAdd(false)}
         />
       )}
