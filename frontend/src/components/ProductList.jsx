@@ -12,15 +12,16 @@ export function ProductList() {
 
   const loadProducts = () => {
     fetch("/api/v1/products")
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Products API returned ${r.status}`);
+        return r.json();
+      })
       .then(data => { setProducts(data); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
   };
 
   useEffect(() => {
     loadProducts();
-    fetch("/api/v1/services").then(() => {}).catch(() => {});
-    fetch("/api/v1/products").then(() => {}).catch(() => {});
   }, []);
 
   const handleCreate = async () => {
