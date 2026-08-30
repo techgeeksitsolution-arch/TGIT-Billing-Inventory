@@ -168,7 +168,7 @@ purchasesRouter.post("/upload-ocr", uploadAny, async (req, res, next) => {
     let parseResult = null;
 
     try {
-      const ocrResult = await extractTextFromImage(org.id, base64Data);
+      const ocrResult = await extractTextFromImage(org.id, base64Data, req.file.mimetype);
       if (ocrResult.status === "OK" && ocrResult.text) {
         rawText = ocrResult.text;
         ocrStatus = "EXTRACTED";

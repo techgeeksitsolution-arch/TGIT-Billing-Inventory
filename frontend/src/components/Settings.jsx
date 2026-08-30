@@ -270,36 +270,80 @@ export function Settings() {
         <div className="form-card">
           <h3>Purchase Invoice OCR</h3>
           <p style={{ color: "#486581", fontSize: "0.88rem", marginBottom: 16 }}>
-            Configure an OCR provider to extract data from uploaded purchase invoices. The API key is stored securely server-side and never sent to the browser.
+            Configure an OCR provider to extract data from uploaded purchase invoices. API keys are stored server-side and never returned to the browser.
           </p>
           <div className="form-row">
-            <div className="form-group" style={{ maxWidth: 240 }}>
+            <div className="form-group" style={{ maxWidth: 260 }}>
               <label>Provider</label>
               <select value={ocrConfig.provider} onChange={(e) => setOcrConfig({ ...ocrConfig, provider: e.target.value })}>
                 <option value="">Not configured</option>
-                <option value="GOOGLE_VISION">Google Vision API</option>
-                <option value="AZURE_FORM">Azure Form Recognizer</option>
-                <option value="TESSERACT">Tesseract (local)</option>
+                <option value="GEMINI">Gemini API (Google AI)</option>
+                <option value="MISTRAL">Mistral OCR</option>
+                <option value="GOOGLE_VISION">Google Cloud Vision API</option>
+                <option value="AZURE_FORM">Azure AI Document Intelligence</option>
+                <option value="TESSERACT">Tesseract OCR (local)</option>
+                <option value="PADDLEOCR">PaddleOCR (local)</option>
               </select>
             </div>
-            <div className="form-group" style={{ maxWidth: 320 }}>
-              <label>API Key {ocrConfig.configured && <span className="muted">(already set)</span>}</label>
-              <input type="password" value={ocrApiKey} onChange={(e) => setOcrApiKey(e.target.value)} placeholder={ocrConfig.configured ? "Leave blank to keep existing" : "Enter API key"} />
-              <small style={{ color: "#718096", fontSize: "0.78rem" }}>Stored encrypted on server. Never exposed to frontend.</small>
-            </div>
           </div>
-          {(ocrConfig.provider === "AZURE_FORM") && (
+
+          {(ocrConfig.provider === "GEMINI" || ocrConfig.provider === "MISTRAL" || ocrConfig.provider === "GOOGLE_VISION") && (
             <div className="form-row">
               <div className="form-group" style={{ maxWidth: 400 }}>
-                <label>Azure Endpoint URL</label>
-                <input value={ocrConfig.endpoint || ""} onChange={(e) => setOcrConfig({ ...ocrConfig, endpoint: e.target.value })} placeholder="https://your-resource.cognitiveservices.azure.com" />
+                <label>API Key {ocrConfig.configured && <span className="muted">(already set)</span>}</label>
+                <input type="password" value={ocrApiKey} onChange={(e) => setOcrApiKey(e.target.value)} placeholder={ocrConfig.configured ? "Leave blank to keep existing" : "Enter API key"} />
+                <small style={{ color: "#718096", fontSize: "0.78rem" }}>
+                  {ocrConfig.provider === "GEMINI" && "Google AI Studio API key (generativelanguage.googleapis.com)"}
+                  {ocrConfig.provider === "MISTRAL" && "Mistral API key (api.mistral.ai)"}
+                  {ocrConfig.provider === "GOOGLE_VISION" && "Google Cloud Vision API key (vision.googleapis.com)"}
+                </small>
               </div>
             </div>
           )}
-          <div style={{ marginBottom: 12 }}>
+
+          {ocrConfig.provider === "AZURE_FORM" && (
+            <>
+              <div className="form-row">
+                <div className="form-group" style={{ maxWidth: 400 }}>
+                  <label>Endpoint URL</label>
+                  <input value={ocrConfig.endpoint || ""} onChange={(e) => setOcrConfig({ ...ocrConfig, endpoint: e.target.value })} placeholder="https://your-resource.cognitiveservices.azure.com" />
+                  <small style={{ color: "#718096", fontSize: "0.78rem" }}>Azure Document Intelligence resource endpoint</small>
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group" style={{ maxWidth: 400 }}>
+                  <label>API Key {ocrConfig.configured && <span className="muted">(already set)</span>}</label>
+                  <input type="password" value={ocrApiKey} onChange={(e) => setOcrApiKey(e.target.value)} placeholder={ocrConfig.configured ? "Leave blank to keep existing" : "Enter API key"} />
+                  <small style={{ color: "#718096", fontSize: "0.78rem" }}>Azure Document Intelligence subscription key</small>
+                </div>
+              </div>
+            </>
+          )}
+
+          {ocrConfig.provider === "TESSERACT" && (
+            <div style={{ padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #9ae6b4", marginTop: 12 }}>
+              <strong style={{ color: "#276749" }}>Tesseract OCR</strong>
+              <p style={{ color: "#486581", fontSize: "0.85rem", margin: "6px 0 0" }}>
+                Local OCR engine — no API key required. Tesseract must be installed on the server.
+                Supports PNG, JPG, TIFF, PDF (with poppler). English language data by default.
+              </p>
+            </div>
+          )}
+
+          {ocrConfig.provider === "PADDLEOCR" && (
+            <div style={{ padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #9ae6b4", marginTop: 12 }}>
+              <strong style={{ color: "#276749" }}>PaddleOCR</strong>
+              <p style={{ color: "#486581", fontSize: "0.85rem", margin: "6px 0 0" }}>
+                Local OCR engine — no API key required. PaddlePaddle OCR must be installed on the server.
+                Excellent for Indian language invoices. Supports PNG, JPG, PDF.
+              </p>
+            </div>
+          )}
+
+          <div style={{ marginBottom: 12, marginTop: 12 }}>
             <span className={`badge ${ocrConfig.configured ? "active" : "inactive"}`}>{ocrConfig.configured ? "Configured" : "Not Configured"}</span>
           </div>
-          <button className="btn btn-primary" onClick={saveOcrConfig} disabled={ocrSaving || !ocrConfig.provider}>Save OCR Config</button>
+          <button className="btn btn-primary" onClick={saveOcrConfig} disabled={ocrSaving}>Save OCR Config</button>
         </div>
       )}
     </div>

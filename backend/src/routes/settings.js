@@ -140,12 +140,25 @@ settingsRouter.post("/terms/reorder", async (req, res, next) => {
 
 const OCR_CONFIG_KEY = "ocrProvider";
 
+function isOcrConfigured(cfg) {
+  if (!cfg.provider || !cfg.enabled) return false;
+  switch (cfg.provider) {
+    case "TESSERACT":
+    case "PADDLEOCR":
+      return true;
+    case "AZURE_FORM":
+      return Boolean(cfg.apiKey && cfg.endpoint);
+    default:
+      return Boolean(cfg.apiKey);
+  }
+}
+
 settingsRouter.get("/ocr-config", async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
     const s = await prisma.setting.findUnique({ where: { organizationId_key: { organizationId: org.id, key: OCR_CONFIG_KEY } } });
     const cfg = s?.value ? JSON.parse(s.value) : { provider: null, endpoint: null, model: null, enabled: false };
-    const redacted = { provider: cfg.provider || null, endpoint: cfg.endpoint || null, model: cfg.model || null, enabled: Boolean(cfg.enabled), configured: Boolean(cfg.apiKey && cfg.provider) };
+    const redacted = { provider: cfg.provider || null, endpoint: cfg.endpoint || null, model: cfg.model || null, enabled: Boolean(cfg.enabled), configured: isOcrConfigured(cfg) };
     res.json(redacted);
   } catch (e) { next(e); }
 });
@@ -166,6 +179,6 @@ settingsRouter.put("/ocr-config", async (req, res, next) => {
       update: { value: JSON.stringify(cfg) },
       create: { organizationId: org.id, key: OCR_CONFIG_KEY, value: JSON.stringify(cfg) },
     });
-    res.json({ provider: cfg.provider, endpoint: cfg.endpoint, model: cfg.model, enabled: cfg.enabled, configured: Boolean(cfg.apiKey && cfg.provider) });
+    res.json({ provider: cfg.provider, endpoint: cfg.endpoint, model: cfg.model, enabled: cfg.enabled, configured: isOcrConfigured(cfg) });
   } catch (e) { next(e); }
 });

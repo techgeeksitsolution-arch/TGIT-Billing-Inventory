@@ -6,7 +6,7 @@ const ALLOWED_MIMES = [
   "image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif",
   "application/pdf",
 ];
-const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 export function validateUploadFile(file) {
   if (!file) return { ok: false, error: "NO_FILE", message: "No file provided" };
@@ -28,6 +28,7 @@ export async function getOcrConfig(organizationId) {
   return {
     provider: parsed.provider || null,
     apiKey: parsed.apiKey || null,
+    apiKey2: parsed.apiKey2 || null,
     endpoint: parsed.endpoint || null,
     model: parsed.model || null,
     enabled: Boolean(parsed.enabled),
@@ -48,8 +49,102 @@ export function redactOcrConfig(cfg) {
     endpoint: cfg.endpoint || null,
     model: cfg.model || null,
     enabled: Boolean(cfg.enabled),
-    configured: Boolean(cfg.apiKey && cfg.provider),
+    configured: isProviderConfigured(cfg),
   };
+}
+
+function isProviderConfigured(cfg) {
+  if (!cfg.provider || !cfg.enabled) return false;
+  switch (cfg.provider) {
+    case "GEMINI": return Boolean(cfg.apiKey);
+    case "MISTRAL": return Boolean(cfg.apiKey);
+    case "GOOGLE_VISION": return Boolean(cfg.apiKey);
+    case "AZURE_FORM": return Boolean(cfg.apiKey && cfg.endpoint);
+    case "TESSERACT": return true;
+    case "PADDLEOCR": return true;
+    default: return false;
+  }
+}
+
+function checkProviderCredentials(cfg) {
+  if (!cfg.provider) return { ok: false, message: "No provider selected" };
+  switch (cfg.provider) {
+    case "GEMINI":
+      if (!cfg.apiKey) return { ok: false, message: "Gemini API key is required" };
+      return { ok: true };
+    case "MISTRAL":
+      if (!cfg.apiKey) return { ok: false, message: "Mistral API key is required" };
+      return { ok: true };
+    case "GOOGLE_VISION":
+      if (!cfg.apiKey) return { ok: false, message: "Google Vision API key is required" };
+      return { ok: true };
+    case "AZURE_FORM":
+      if (!cfg.apiKey) return { ok: false, message: "Azure API key is required" };
+      if (!cfg.endpoint) return { ok: false, message: "Azure endpoint URL is required" };
+      return { ok: true };
+    case "TESSERACT":
+      return { ok: true };
+    case "PADDLEOCR":
+      return { ok: true };
+    default:
+      return { ok: false, message: `Unknown provider: ${cfg.provider}` };
+  }
+}
+
+async function callGemini(apiKey, base64Data, mimeType) {
+  const model = "gemini-2.0-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: "Extract ALL text from this purchase invoice image exactly as it appears. Include every line, number, date, GSTIN, HSN code, item name, quantity, rate, tax amounts, and totals. Preserve the original layout and formatting as much as possible. Do not summarize or omit any text." },
+          { inlineData: { mimeType: mimeType || "image/png", data: base64Data } },
+        ],
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+    }),
+    signal: AbortSignal.timeout(90000),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    if (res.status === 400 || res.status === 403) throw new Error("Invalid API credentials");
+    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text).join("\n") || "";
+  return text;
+}
+
+async function callMistral(apiKey, base64Data, mimeType) {
+  const url = "https://api.mistral.ai/v1/ocr";
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "mistral-ocr-latest",
+      document: {
+        type: "image_url",
+        image_url: `data:${mimeType || "image/png"};base64,${base64Data}`,
+      },
+    }),
+    signal: AbortSignal.timeout(90000),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    if (res.status === 401 || res.status === 403) throw new Error("Invalid API credentials");
+    throw new Error(`Mistral API error ${res.status}: ${err.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const pages = data.pages || [];
+  return pages.map(p => p.markdown || p.text || "").join("\n\n");
 }
 
 async function callGoogleVision(apiKey, base64Data) {
@@ -69,16 +164,16 @@ async function callGoogleVision(apiKey, base64Data) {
   );
   if (!res.ok) {
     const err = await res.text().catch(() => "");
+    if (res.status === 400 || res.status === 403) throw new Error("Invalid API credentials");
     throw new Error(`Google Vision API error ${res.status}: ${err.slice(0, 200)}`);
   }
   const data = await res.json();
-  const text = data.responses?.[0]?.fullTextAnnotation?.text || "";
-  return text;
+  return data.responses?.[0]?.fullTextAnnotation?.text || "";
 }
 
 async function callAzureForm(apiKey, endpoint, base64Data) {
-  const url = endpoint || "https://tgit-ocr.cognitiveservices.azure.com";
-  const analyzeUrl = `${url.replace(/\/$/, "")}/formmodels/analyze?api-version=2023-07-31`;
+  const url = endpoint.replace(/\/$/, "");
+  const analyzeUrl = `${url}/documentintelligence/documentModels/prebuilt-read:analyze?api-version=2024-11-30`;
 
   const buf = Buffer.from(base64Data, "base64");
   const res = await fetch(analyzeUrl, {
@@ -88,16 +183,17 @@ async function callAzureForm(apiKey, endpoint, base64Data) {
       "Ocp-Apim-Subscription-Key": apiKey,
     },
     body: buf,
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(90000),
   });
   if (!res.ok) {
     const err = await res.text().catch(() => "");
-    throw new Error(`Azure Form API error ${res.status}: ${err.slice(0, 200)}`);
+    if (res.status === 401 || res.status === 403) throw new Error("Invalid API credentials");
+    throw new Error(`Azure Document Intelligence error ${res.status}: ${err.slice(0, 200)}`);
   }
   const result = await res.json();
   const lines = [];
-  if (result.analyzeResult?.readResult?.pages) {
-    for (const page of result.analyzeResult.readResult.pages) {
+  if (result.analyzeResult?.pages) {
+    for (const page of result.analyzeResult.pages) {
       for (const line of page.lines || []) {
         lines.push(line.content);
       }
@@ -135,33 +231,111 @@ async function callTesseractLocal(base64Data) {
   }
 }
 
-export async function extractTextFromImage(organizationId, base64Data) {
+async function callPaddleOCR(base64Data) {
+  try {
+    const { exec } = await import("child_process");
+    const { promisify } = await import("util");
+    const { writeFile, unlink, readFile } = await import("fs/promises");
+    const { join } = await import("path");
+    const { tmpdir } = await import("os");
+    const execAsync = promisify(exec);
+
+    const buf = Buffer.from(base64Data, "base64");
+    const isPdf = buf[0] === 0x25 && buf[1] === 0x50;
+    const ext = isPdf ? "pdf" : "png";
+    const tmpPath = join(tmpdir(), `ocr_paddle_${Date.now()}.${ext}`);
+    await writeFile(tmpPath, buf);
+
+    const outDir = join(tmpdir(), `paddle_out_${Date.now()}`);
+    try {
+      await execAsync(`paddleocr --image "${tmpPath}" --output ${outDir}`, { timeout: 60000 });
+      const jsonFiles = await import("fs/promises").then(fs => fs.readdir(outDir).catch(() => []));
+      let text = "";
+      for (const f of jsonFiles) {
+        if (f.endsWith(".json")) {
+          const raw = await readFile(join(outDir, f), "utf-8").catch(() => "");
+          try {
+            const data = JSON.parse(raw);
+            if (data?.rec_texts) text += data.rec_texts.join("\n") + "\n";
+            else if (Array.isArray(data)) {
+              for (const item of data) {
+                if (item?.[1]?.[0]) text += item[1][0] + "\n";
+              }
+            }
+          } catch { text += raw + "\n"; }
+        }
+      }
+      if (!text) {
+        const txtFiles = await import("fs/promises").then(fs => fs.readdir(outDir).catch(() => []));
+        for (const f of txtFiles) {
+          if (f.endsWith(".txt")) {
+            text += await readFile(join(outDir, f), "utf-8").catch(() => "") + "\n";
+          }
+        }
+      }
+      return text;
+    } finally {
+      await unlink(tmpPath).catch(() => {});
+    }
+  } catch (e) {
+    throw new Error(`PaddleOCR failed: ${e.message}`);
+  }
+}
+
+export async function extractTextFromImage(organizationId, base64Data, mimeType) {
   const cfg = await getOcrConfig(organizationId);
 
   if (!cfg.enabled || !cfg.provider) {
     return { text: "", provider: "none", status: "NOT_CONFIGURED" };
   }
 
-  if ((cfg.provider === "GOOGLE_VISION" || cfg.provider === "AZURE_FORM") && !cfg.apiKey) {
-    return { text: "", provider: cfg.provider, status: "NOT_CONFIGURED" };
+  const credCheck = checkProviderCredentials(cfg);
+  if (!credCheck.ok) {
+    return { text: "", provider: cfg.provider, status: "NOT_CONFIGURED", message: credCheck.message };
   }
 
   let text = "";
-  switch (cfg.provider) {
-    case "GOOGLE_VISION":
-      text = await callGoogleVision(cfg.apiKey, base64Data);
-      break;
-    case "AZURE_FORM":
-      text = await callAzureForm(cfg.apiKey, cfg.endpoint, base64Data);
-      break;
-    case "TESSERACT":
-      text = await callTesseractLocal(base64Data);
-      break;
-    default:
-      return { text: "", provider: cfg.provider, status: "UNKNOWN_PROVIDER" };
+  try {
+    switch (cfg.provider) {
+      case "GEMINI":
+        text = await callGemini(cfg.apiKey, base64Data, mimeType);
+        break;
+      case "MISTRAL":
+        text = await callMistral(cfg.apiKey, base64Data, mimeType);
+        break;
+      case "GOOGLE_VISION":
+        text = await callGoogleVision(cfg.apiKey, base64Data);
+        break;
+      case "AZURE_FORM":
+        text = await callAzureForm(cfg.apiKey, cfg.endpoint, base64Data);
+        break;
+      case "TESSERACT":
+        text = await callTesseractLocal(base64Data);
+        break;
+      case "PADDLEOCR":
+        text = await callPaddleOCR(base64Data);
+        break;
+      default:
+        return { text: "", provider: cfg.provider, status: "UNKNOWN_PROVIDER" };
+    }
+    return { text, provider: cfg.provider, status: "OK" };
+  } catch (e) {
+    console.error(`OCR extraction failed [${cfg.provider}]:`, e.message);
+    return { text: "", provider: cfg.provider, status: "OCR_FAILED", message: e.message };
   }
+}
 
-  return { text, provider: cfg.provider, status: "OK" };
+export function getLocalToolStatus() {
+  const results = {};
+  try {
+    const { execSync } = require("child_process");
+    try { execSync("tesseract --version", { stdio: "pipe" }); results.tesseract = true; } catch { results.tesseract = false; }
+  } catch { results.tesseract = false; }
+  try {
+    const { execSync } = require("child_process");
+    try { execSync("paddleocr --help", { stdio: "pipe" }); results.paddleocr = true; } catch { results.paddleocr = false; }
+  } catch { results.paddleocr = false; }
+  return results;
 }
 
 function findField(text, patterns) {
@@ -183,6 +357,13 @@ function findAmount(text, labelPatterns) {
 function extractGstin(text) {
   const m = text.match(/(?:GSTIN|GST\s*(?:No|Number|#)?|UIN)\s*[:.\-]?\s*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z][Z\d][0-9A-Z])/i);
   return m ? m[1].toUpperCase() : null;
+}
+
+function extractStateCode(text) {
+  const gstin = extractGstin(text);
+  if (gstin) return gstin.substring(0, 2);
+  const m = text.match(/(?:State\s*(?:Code|No)?)\s*[:.\-]?\s*(\d{2})/i);
+  return m ? m[1] : null;
 }
 
 function extractInvoiceNumber(text) {
@@ -220,9 +401,7 @@ function extractState(text) {
   for (const s of states) {
     if (text.toLowerCase().includes(s.toLowerCase())) return s;
   }
-  const stCode = text.match(/(?:State\s*(?:Code|No)?)\s*[:.\-]?\s*(\d{2})/i);
-  if (stCode) return stCode[1];
-  return null;
+  return extractStateCode(text);
 }
 
 function extractItems(text) {
@@ -255,7 +434,7 @@ function extractItems(text) {
   return items;
 }
 
-function extractHsn(text, description) {
+function extractHsn(text) {
   const m = text.match(/(?:HSN|SAC)\s*(?:Code)?\s*[:.\-]?\s*(\d{4,8})/i);
   if (m) return m[1];
   const hsnLine = text.split("\n").find(l => /\b\d{4,8}\b/.test(l) && /HSN/i.test(l));
@@ -269,7 +448,7 @@ function extractHsn(text, description) {
 export function parseOcrText(text) {
   if (!text || !text.trim()) {
     return {
-      supplier: { name: null, address: null, gstin: null, state: null, phone: null, email: null },
+      supplier: { name: null, address: null, gstin: null, state: null, stateCode: null, phone: null, email: null },
       invoice: { supplierInvoiceNo: null, invoiceDate: null, dueDate: null, poNo: null, placeOfSupply: null },
       items: [],
       totals: { taxableTotal: null, cgstTotal: null, sgstTotal: null, igstTotal: null, otherCharges: 0, roundOff: 0, grandTotal: null },
@@ -278,8 +457,9 @@ export function parseOcrText(text) {
   }
 
   const gstin = extractGstin(text);
+  const stateCode = extractStateCode(text);
   const supplierName = findField(text, [
-    /(?:Supplier|Vendor|Seller|From|Sold\s*By)\s*[:.\-]?\s*(.{3,80})/i,
+    /(?:Supplier|Vendor|Seller|From|Sold\s*By|Billed\s*By)\s*[:.\-]?\s*(.{3,80})/i,
     /^([A-Z][A-Za-z\s&]{3,60}(?:Pvt|Ltd|LLP|Inc|Co)\.?)/m,
   ]);
   const address = findField(text, [
@@ -317,11 +497,11 @@ export function parseOcrText(text) {
   if (items.length === 0) confidence = "LOW";
 
   return {
-    supplier: { name: supplierName, address, gstin, state, phone, email },
+    supplier: { name: supplierName, address, gstin, state, stateCode, phone, email },
     invoice: { supplierInvoiceNo, invoiceDate, dueDate, poNo, placeOfSupply },
     items: items.map(it => ({
       ...it,
-      hsnCode: extractHsn(text, it.description),
+      hsnCode: extractHsn(text),
       cgstRate: 0, sgstRate: 0, igstRate: 0,
       cgstAmount: 0, sgstAmount: 0, igstAmount: 0,
       discount: 0, uom: "Nos",
