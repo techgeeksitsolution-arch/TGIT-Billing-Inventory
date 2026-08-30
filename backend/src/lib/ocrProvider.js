@@ -142,6 +142,10 @@ export async function extractTextFromImage(organizationId, base64Data) {
     return { text: "", provider: "none", status: "NOT_CONFIGURED" };
   }
 
+  if ((cfg.provider === "GOOGLE_VISION" || cfg.provider === "AZURE_FORM") && !cfg.apiKey) {
+    return { text: "", provider: cfg.provider, status: "NOT_CONFIGURED" };
+  }
+
   let text = "";
   switch (cfg.provider) {
     case "GOOGLE_VISION":
