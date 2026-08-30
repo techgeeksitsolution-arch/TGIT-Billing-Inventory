@@ -342,7 +342,7 @@ model PurchaseItem {
 model PurchaseAttachment {
   id         String          @id @default(uuid()) @db.Uuid
   organizationId String      @db.Uuid
-  purchaseId String          @db.Uuid
+  purchaseId String?         @db.Uuid
   ocrJobId   String?         @db.Uuid
   storageKey String?
   fileName   String
@@ -351,7 +351,7 @@ model PurchaseAttachment {
   data       String?
   checksum   String?
   createdAt  DateTime        @default(now())
-  purchase   PurchaseInvoice @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchase   PurchaseInvoice? @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
   ocrJob     OcrJob?         @relation(fields: [ocrJobId], references: [id], onDelete: SetNull)
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import PurchaseForm from "./PurchaseForm.jsx";
 import PurchasePreview from "./PurchasePreview.jsx";
+import PurchaseOcrUpload from "./PurchaseOcrUpload.jsx";
 import ImportModal from "./ImportModal.jsx";
 import { apiGet } from "../api";
 import { useDeleteDocument } from "../lib/useDeleteDocument.js";
@@ -38,6 +39,7 @@ export function PurchaseList() {
 
   if (view === "form") return <PurchaseForm purchaseId={pid} onSaved={(id) => { if (id) { setPid(id); setView("preview"); } else setView("list"); }} />;
   if (view === "preview") return <PurchasePreview purchaseId={pid} onBack={() => { setView("list"); load(); }} onEdit={(id) => { setPid(id); setView("form"); }} onChanged={() => load()} />;
+  if (view === "ocr") return <PurchaseOcrUpload onSaved={(id) => { setPid(id); setView("preview"); }} onCancel={() => setView("list")} />;
 
   return (
     <div className="page">
@@ -45,6 +47,7 @@ export function PurchaseList() {
         <h1>Purchases</h1>
         <div className="header-actions">
           <button className="btn btn-outline" onClick={() => setShowImport(true)}>Import / Export</button>
+          <button className="btn" onClick={() => setView("ocr")}>📷 Scan Invoice (OCR)</button>
           <button className="btn btn-primary" onClick={() => { setPid(null); setView("form"); }}>New Purchase</button>
         </div>
       </div>

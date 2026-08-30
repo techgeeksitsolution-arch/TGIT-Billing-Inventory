@@ -21,14 +21,14 @@ export function Settings() {
   const [editingTerm, setEditingTerm] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
 
-  const [ocrConfig, setOcrConfig] = useState({ provider: "", configured: false });
+  const [ocrConfig, setOcrConfig] = useState({ provider: "", endpoint: "", model: "", enabled: false, configured: false });
   const [ocrApiKey, setOcrApiKey] = useState("");
   const [ocrSaving, setOcrSaving] = useState(false);
 
   useEffect(() => {
     fetch("/api/v1/settings/financial-year").then(r => r.json()).then(d => { setFy(d.financialYear); }).catch(() => {});
     fetch("/api/v1/settings/company-profile").then(r => r.json()).then(d => setProfile(p => ({ ...p, ...d }))).catch(() => {});
-    fetch("/api/v1/settings/ocr-config").then(r => r.json()).then(d => setOcrConfig({ provider: d.provider || "", configured: Boolean(d.configured) })).catch(() => {});
+    fetch("/api/v1/settings/ocr-config").then(r => r.json()).then(d => setOcrConfig({ provider: d.provider || "", endpoint: d.endpoint || "", model: d.model || "", enabled: Boolean(d.enabled), configured: Boolean(d.configured) })).catch(() => {});
     loadTerms("SALES");
     setLoading(false);
     // eslint-disable-next-line
@@ -37,16 +37,21 @@ export function Settings() {
   const saveOcrConfig = async () => {
     setOcrSaving(true); setError(null); setMessage(null);
     try {
-      const payload = { provider: ocrConfig.provider };
+      const payload = {
+        provider: ocrConfig.provider,
+        endpoint: ocrConfig.endpoint || undefined,
+        model: ocrConfig.model || undefined,
+        enabled: Boolean(ocrConfig.provider),
+      };
       if (ocrApiKey.trim()) payload.apiKey = ocrApiKey.trim();
       const res = await fetch("/api/v1/settings/ocr-config", {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "Failed");
-      setOcrConfig({ provider: data.provider || "", configured: Boolean(data.configured) });
+      setOcrConfig({ ...ocrConfig, provider: data.provider || "", enabled: Boolean(data.enabled), configured: Boolean(data.configured) });
       setOcrApiKey("");
-      setMessage("OCR configuration saved");
+      setMessage("OCR configuration saved. API key stored securely on server.");
     } catch (e) { setError(e.message); } finally { setOcrSaving(false); }
   };
 
@@ -265,14 +270,14 @@ export function Settings() {
         <div className="form-card">
           <h3>Purchase Invoice OCR</h3>
           <p style={{ color: "#486581", fontSize: "0.88rem", marginBottom: 16 }}>
-            Configure an OCR provider to extract data from uploaded purchase invoices. The API key is stored securely and never returned to the browser.
+            Configure an OCR provider to extract data from uploaded purchase invoices. The API key is stored securely server-side and never sent to the browser.
           </p>
           <div className="form-row">
             <div className="form-group" style={{ maxWidth: 240 }}>
               <label>Provider</label>
               <select value={ocrConfig.provider} onChange={(e) => setOcrConfig({ ...ocrConfig, provider: e.target.value })}>
                 <option value="">Not configured</option>
-                <option value="GOOGLE_VISION">Google Vision</option>
+                <option value="GOOGLE_VISION">Google Vision API</option>
                 <option value="AZURE_FORM">Azure Form Recognizer</option>
                 <option value="TESSERACT">Tesseract (local)</option>
               </select>
@@ -280,8 +285,17 @@ export function Settings() {
             <div className="form-group" style={{ maxWidth: 320 }}>
               <label>API Key {ocrConfig.configured && <span className="muted">(already set)</span>}</label>
               <input type="password" value={ocrApiKey} onChange={(e) => setOcrApiKey(e.target.value)} placeholder={ocrConfig.configured ? "Leave blank to keep existing" : "Enter API key"} />
+              <small style={{ color: "#718096", fontSize: "0.78rem" }}>Stored encrypted on server. Never exposed to frontend.</small>
             </div>
           </div>
+          {(ocrConfig.provider === "AZURE_FORM") && (
+            <div className="form-row">
+              <div className="form-group" style={{ maxWidth: 400 }}>
+                <label>Azure Endpoint URL</label>
+                <input value={ocrConfig.endpoint || ""} onChange={(e) => setOcrConfig({ ...ocrConfig, endpoint: e.target.value })} placeholder="https://your-resource.cognitiveservices.azure.com" />
+              </div>
+            </div>
+          )}
           <div style={{ marginBottom: 12 }}>
             <span className={`badge ${ocrConfig.configured ? "active" : "inactive"}`}>{ocrConfig.configured ? "Configured" : "Not Configured"}</span>
           </div>

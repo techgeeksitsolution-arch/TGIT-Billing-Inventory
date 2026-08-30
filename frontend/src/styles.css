@@ -355,3 +355,45 @@ body { min-width: 320px; }
   .items-table, .invoice-items-table { min-width: 0; }
   .table-container, .items-table-container { overflow: visible; }
 }
+
+/* ============================================================
+   Purchase Invoice OCR Styles
+   ============================================================ */
+.ocr-dropzone {
+  border: 2px dashed #cbd5e0;
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f8fafc;
+  margin-bottom: 16px;
+}
+.ocr-dropzone:hover, .ocr-dropzone.drag-over {
+  border-color: #0f766e;
+  background: #f0fdfa;
+}
+.ocr-dropzone-icon { font-size: 3rem; margin-bottom: 12px; }
+.ocr-dropzone-title { font-size: 1.1rem; font-weight: 600; color: #1a202c; margin: 0 0 8px; }
+.ocr-dropzone-subtitle { font-size: 0.85rem; color: #718096; margin: 0; }
+
+.ocr-upload-progress { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid #e2e8f0; border-top-color: #0f766e;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.progress-bar { width: 100%; max-width: 300px; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; background: #0f766e; transition: width 0.3s; border-radius: 3px; }
+
+.info-msg { background: #e6f7ff; color: #0050b3; padding: 10px 14px; border-radius: 6px; border: 1px solid #91d5ff; font-size: 0.85rem; margin-bottom: 12px; }
+.success-msg { background: #f0fff4; color: #276749; padding: 10px 14px; border-radius: 6px; border: 1px solid #9ae6b4; font-size: 0.85rem; margin-bottom: 12px; cursor: pointer; }
+.error-msg { background: #fff5f5; color: #9b2c2c; padding: 10px 14px; border-radius: 6px; border: 1px solid #feb2b2; font-size: 0.85rem; margin-bottom: 12px; cursor: pointer; }
+.warning-msg { background: #fffff0; color: #975a16; padding: 10px 14px; border-radius: 6px; border: 1px solid #fbd38d; font-size: 0.85rem; margin-bottom: 12px; }
+
+/* OCR Review screen responsive improvements */
+.ocr-review-supplier { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+@media (max-width: 800px) { .ocr-review-supplier { grid-template-columns: 1fr; } }

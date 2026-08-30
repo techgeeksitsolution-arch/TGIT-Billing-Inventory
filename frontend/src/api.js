@@ -113,3 +113,24 @@ export async function apiPut(url, body) {
   if (!parsed.ok) throw toError(parsed);
   return parsed.data;
 }
+
+export async function apiUpload(url, file, onProgress) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const xhr = new XMLHttpRequest();
+  return new Promise((resolve, reject) => {
+    xhr.open("POST", `${API}${url}`);
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else reject(toError({ status: xhr.status, data, errorMessage: data?.error?.message || `Upload failed (HTTP ${xhr.status})` }));
+      } catch {
+        reject(new Error("Invalid server response"));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    if (onProgress) xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    xhr.send(formData);
+  });
+}

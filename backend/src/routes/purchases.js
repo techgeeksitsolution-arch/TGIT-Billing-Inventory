@@ -2,27 +2,17 @@ import { Router } from "express";
 import {
   listPurchases, getPurchase, createPurchase, updatePurchase, finalizePurchase, cancelPurchase,
   addPurchasePayment, listPurchasePayments, deletePurchasePayment, deletePurchaseInvoice,
+  checkDuplicatePurchase,
 } from "../services/purchaseService.js";
 import { getOrCreateOrgAndUser, prisma } from "../db.js";
 import { uploadExcel, uploadAny } from "../lib/upload.js";
 import {
   readRowsFromBuffer, buildTemplateBuffer, buildPurchaseExportBuffer, validatePurchaseImport, createPurchasesFromGroups, importBatches, randomUUID, PURCHASE_HEADERS,
 } from "../lib/importExport.js";
-
-const OCR_CONFIG_KEY = "ocrProvider";
-
-async function getOcrConfig(orgId) {
-  const s = await prisma.setting.findUnique({ where: { organizationId_key: { organizationId: orgId, key: OCR_CONFIG_KEY } } });
-  return s?.value ? JSON.parse(s.value) : { provider: null, endpoint: null, model: null, enabled: false };
-}
-
-async function saveOcrConfig(orgId, cfg) {
-  await prisma.setting.upsert({
-    where: { organizationId_key: { organizationId: orgId, key: OCR_CONFIG_KEY } },
-    update: { value: JSON.stringify(cfg) },
-    create: { organizationId: orgId, key: OCR_CONFIG_KEY, value: JSON.stringify(cfg) },
-  });
-}
+import {
+  validateUploadFile, getOcrConfig, saveOcrConfig, redactOcrConfig,
+  extractTextFromImage, parseOcrText,
+} from "../lib/ocrProvider.js";
 
 export const purchasesRouter = Router();
 
@@ -85,6 +75,16 @@ purchasesRouter.post("/import/confirm", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+purchasesRouter.get("/check-duplicate", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const { supplierId, supplierInvoiceNo, invoiceDate } = req.query;
+    if (!supplierId || !supplierInvoiceNo) return res.json({ duplicate: false });
+    const result = await checkDuplicatePurchase(org.id, supplierId, supplierInvoiceNo, invoiceDate || null);
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
 purchasesRouter.get("/:id", async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
@@ -97,6 +97,16 @@ purchasesRouter.get("/:id", async (req, res, next) => {
 purchasesRouter.post("/", async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
+    const dup = await checkDuplicatePurchase(org.id, req.body.supplierId, req.body.supplierInvoiceNo, req.body.invoiceDate);
+    if (dup.duplicate) {
+      return res.status(409).json({
+        error: {
+          code: "DUPLICATE_INVOICE",
+          message: `A purchase invoice from this supplier with number ${req.body.supplierInvoiceNo} already exists (${dup.existing.internalNumber}).`,
+          existing: dup.existing,
+        },
+      });
+    }
     const purchase = await createPurchase(org.id, req.body);
     res.status(201).json(purchase);
   } catch (e) { next(e); }
@@ -126,11 +136,174 @@ purchasesRouter.post("/:id/cancel", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// Attachments
+purchasesRouter.post("/upload-ocr", uploadAny, async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const validation = validateUploadFile(req.file);
+    if (!validation.ok) {
+      return res.status(400).json({ error: { code: validation.error, message: validation.message } });
+    }
+
+    const base64Data = req.file.buffer.toString("base64");
+
+    const att = await prisma.purchaseAttachment.create({
+      data: {
+        organizationId: org.id,
+        purchaseId: null,
+        storageKey: randomUUID(),
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        data: base64Data,
+      },
+    });
+
+    const job = await prisma.ocrJob.create({
+      data: { organizationId: org.id, purchaseId: null, provider: "pending", status: "PENDING" },
+    });
+    await prisma.purchaseAttachment.update({ where: { id: att.id }, data: { ocrJobId: job.id } });
+
+    let rawText = "";
+    let ocrStatus = "MANUAL";
+    let parseResult = null;
+
+    try {
+      const ocrResult = await extractTextFromImage(org.id, base64Data);
+      if (ocrResult.status === "OK" && ocrResult.text) {
+        rawText = ocrResult.text;
+        ocrStatus = "EXTRACTED";
+        parseResult = parseOcrText(rawText);
+      } else if (ocrResult.status === "NOT_CONFIGURED") {
+        ocrStatus = "NOT_CONFIGURED";
+        parseResult = parseOcrText("");
+      } else if (ocrResult.status === "UNKNOWN_PROVIDER") {
+        ocrStatus = "NOT_CONFIGURED";
+        parseResult = parseOcrText("");
+      }
+    } catch (ocrErr) {
+      console.error("OCR extraction failed:", ocrErr.message);
+      ocrStatus = "OCR_FAILED";
+      parseResult = parseOcrText("");
+    }
+
+    if (!parseResult) {
+      parseResult = parseOcrText("");
+    }
+
+    const suppliers = await prisma.supplier.findMany({
+      where: { organizationId: org.id, isActive: true },
+      select: { id: true, name: true, gstNumber: true, address: true, phone: true, email: true, state: true },
+      orderBy: { name: "asc" },
+    });
+
+    const products = await prisma.product.findMany({
+      where: { organizationId: org.id, isActive: true },
+      include: { taxRate: true, unit: true, brand: true },
+      orderBy: { name: "asc" },
+    });
+
+    const taxRates = await prisma.taxRate.findMany({ orderBy: { rate: "asc" } });
+
+    let matchedSupplier = null;
+    if (parseResult.supplier.gstin) {
+      matchedSupplier = suppliers.find(s => s.gstNumber && s.gstNumber.toUpperCase() === parseResult.supplier.gstin.toUpperCase()) || null;
+    }
+    if (!matchedSupplier && parseResult.supplier.name) {
+      const nameLower = parseResult.supplier.name.toLowerCase();
+      matchedSupplier = suppliers.find(s => s.name.toLowerCase().includes(nameLower) || nameLower.includes(s.name.toLowerCase())) || null;
+    }
+
+    const matchedItems = parseResult.items.map(item => {
+      let matchedProduct = null;
+      const descLower = (item.description || "").toLowerCase();
+      matchedProduct = products.find(p => p.name.toLowerCase() === descLower) ||
+        products.find(p => p.name.toLowerCase().includes(descLower) || descLower.includes(p.name.toLowerCase())) || null;
+
+      const taxRate = matchedProduct?.taxRate ? Number(matchedProduct.taxRate.rate) : (item.taxRate || 0);
+      return {
+        ...item,
+        productId: matchedProduct?.id || null,
+        productName: matchedProduct?.name || item.description,
+        taxRatePercent: taxRate,
+        matched: Boolean(matchedProduct),
+      };
+    });
+
+    await prisma.ocrJob.update({
+      where: { id: job.id },
+      data: {
+        provider: ocrStatus === "NOT_CONFIGURED" ? "none" : "auto",
+        status: ocrStatus === "EXTRACTED" ? "AWAITING_REVIEW" : ocrStatus === "NOT_CONFIGURED" ? "MANUAL_ENTRY" : "AWAITING_REVIEW",
+        rawResult: rawText ? { text: rawText } : { note: "No text extracted; enter data manually" },
+        extracted: parseResult,
+      },
+    });
+
+    res.status(201).json({
+      jobId: job.id,
+      attachmentId: att.id,
+      attachment: { id: att.id, fileName: att.fileName, mimeType: att.mimeType, size: att.size },
+      ocrStatus,
+      rawText,
+      extracted: parseResult,
+      matchedSupplier,
+      matchedItems,
+      suppliers,
+      products: products.map(p => ({
+        id: p.id, name: p.name, sku: p.sku, hsnCode: p.hsnCode,
+        taxRate: p.taxRate ? Number(p.taxRate.rate) : 0,
+        purchasePrice: Number(p.purchasePrice),
+        unit: p.unit?.name || "Nos",
+      })),
+      taxRates: taxRates.map(t => ({ id: t.id, rate: Number(t.rate) })),
+    });
+  } catch (e) { next(e); }
+});
+
+purchasesRouter.post("/ocr/:jobId/apply", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const job = await prisma.ocrJob.findFirst({ where: { id: req.params.jobId, organizationId: org.id } });
+    if (!job) return res.status(404).json({ error: { code: "NOT_FOUND", message: "OCR job not found" } });
+
+    const dup = await checkDuplicatePurchase(org.id, req.body.supplierId, req.body.supplierInvoiceNo, req.body.invoiceDate);
+    if (dup.duplicate) {
+      return res.status(409).json({
+        error: {
+          code: "DUPLICATE_INVOICE",
+          message: `Duplicate: this supplier already has invoice ${req.body.supplierInvoiceNo} (${dup.existing.internalNumber}).`,
+          existing: dup.existing,
+        },
+      });
+    }
+
+    const purchase = await createPurchase(org.id, { ...req.body, source: "OCR" });
+
+    await prisma.ocrJob.update({
+      where: { id: job.id },
+      data: { status: "APPLIED", purchaseId: purchase.id, extracted: req.body, reviewedAt: new Date() },
+    });
+
+    res.status(201).json(purchase);
+  } catch (e) { next(e); }
+});
+
+purchasesRouter.get("/:id/attachments", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const attachments = await prisma.purchaseAttachment.findMany({ where: { purchaseId: req.params.id, organizationId: org.id }, orderBy: { createdAt: "desc" } });
+    res.json(attachments);
+  } catch (e) { next(e); }
+});
+
 purchasesRouter.post("/:id/attachments", uploadAny, async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
     if (!req.file) return res.status(400).json({ error: { code: "NO_FILE", message: "File required" } });
+    const validation = validateUploadFile(req.file);
+    if (!validation.ok) {
+      return res.status(400).json({ error: { code: validation.error, message: validation.message } });
+    }
     const purchase = await prisma.purchaseInvoice.findFirst({ where: { id: req.params.id, organizationId: org.id } });
     if (!purchase) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Purchase not found" } });
     const att = await prisma.purchaseAttachment.create({
@@ -145,14 +318,6 @@ purchasesRouter.post("/:id/attachments", uploadAny, async (req, res, next) => {
       },
     });
     res.status(201).json(att);
-  } catch (e) { next(e); }
-});
-
-purchasesRouter.get("/:id/attachments", async (req, res, next) => {
-  try {
-    const { org } = await getOrCreateOrgAndUser();
-    const attachments = await prisma.purchaseAttachment.findMany({ where: { purchaseId: req.params.id, organizationId: org.id }, orderBy: { createdAt: "desc" } });
-    res.json(attachments);
   } catch (e) { next(e); }
 });
 
@@ -178,7 +343,6 @@ purchasesRouter.delete("/:id/attachments/:attId", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// Payments
 purchasesRouter.post("/:id/payments", async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
@@ -203,41 +367,6 @@ purchasesRouter.delete("/:id/payments/:paymentId", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// OCR
-purchasesRouter.post("/:id/ocr", async (req, res, next) => {
-  try {
-    const { org } = await getOrCreateOrgAndUser();
-    const purchase = await prisma.purchaseInvoice.findFirst({ where: { id: req.params.id, organizationId: org.id } });
-    if (!purchase) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Purchase not found" } });
-    const attachmentId = req.body.attachmentId;
-    if (!attachmentId) return res.status(400).json({ error: { code: "NO_ATTACHMENT", message: "attachmentId required" } });
-    const att = await prisma.purchaseAttachment.findFirst({ where: { id: attachmentId, purchaseId: purchase.id, organizationId: org.id } });
-    if (!att) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Attachment not found" } });
-
-    const cfg = await getOcrConfig(org.id);
-    const job = await prisma.ocrJob.create({
-      data: { organizationId: org.id, purchaseId: purchase.id, provider: cfg.provider || "none", status: "PENDING" },
-    });
-    await prisma.purchaseAttachment.update({ where: { id: att.id }, data: { ocrJobId: job.id } });
-
-    if (!cfg.enabled || !cfg.provider) {
-      await prisma.ocrJob.update({ where: { id: job.id }, data: { status: "NOT_CONFIGURED", rawResult: { error: "OCR Not Configured" } } });
-      return res.json({ ...job, status: "NOT_CONFIGURED", message: "OCR provider not configured" });
-    }
-
-    await prisma.ocrJob.update({ where: { id: job.id }, data: { status: "AWAITING_REVIEW", rawResult: { note: "OCR provider integration pending; enter data manually and apply." } } });
-    res.json({ ...job, status: "AWAITING_REVIEW", message: "OCR provider integration pending; manual review available" });
-  } catch (e) { next(e); }
-});
-
-purchasesRouter.get("/:id/ocr", async (req, res, next) => {
-  try {
-    const { org } = await getOrCreateOrgAndUser();
-    const jobs = await prisma.ocrJob.findMany({ where: { purchaseId: req.params.id, organizationId: org.id }, orderBy: { createdAt: "desc" } });
-    res.json(jobs);
-  } catch (e) { next(e); }
-});
-
 purchasesRouter.get("/ocr/:jobId", async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
@@ -246,19 +375,6 @@ purchasesRouter.get("/ocr/:jobId", async (req, res, next) => {
     res.json(job);
   } catch (e) { next(e); }
 });
-
-purchasesRouter.post("/ocr/:jobId/apply", async (req, res, next) => {
-  try {
-    const { org } = await getOrCreateOrgAndUser();
-    const job = await prisma.ocrJob.findFirst({ where: { id: req.params.jobId, organizationId: org.id } });
-    if (!job) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Job not found" } });
-    const purchase = await createPurchase(org.id, { ...req.body, source: "OCR" });
-    await prisma.ocrJob.update({ where: { id: job.id }, data: { status: "APPLIED", purchaseId: purchase.id, extracted: req.body, reviewedAt: new Date() } });
-    res.status(201).json(purchase);
-  } catch (e) { next(e); }
-});
-
-export { getOcrConfig, saveOcrConfig, OCR_CONFIG_KEY };
 
 purchasesRouter.delete("/:id", async (req, res, next) => {
   try {

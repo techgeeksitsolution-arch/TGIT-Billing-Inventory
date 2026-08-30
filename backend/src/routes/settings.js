@@ -145,7 +145,7 @@ settingsRouter.get("/ocr-config", async (req, res, next) => {
     const { org } = await getOrCreateOrgAndUser();
     const s = await prisma.setting.findUnique({ where: { organizationId_key: { organizationId: org.id, key: OCR_CONFIG_KEY } } });
     const cfg = s?.value ? JSON.parse(s.value) : { provider: null, endpoint: null, model: null, enabled: false };
-    const redacted = { provider: cfg.provider || null, endpoint: cfg.endpoint || null, model: cfg.model || null, enabled: Boolean(cfg.enabled) };
+    const redacted = { provider: cfg.provider || null, endpoint: cfg.endpoint || null, model: cfg.model || null, enabled: Boolean(cfg.enabled), configured: Boolean(cfg.apiKey && cfg.provider) };
     res.json(redacted);
   } catch (e) { next(e); }
 });
@@ -154,19 +154,18 @@ settingsRouter.put("/ocr-config", async (req, res, next) => {
   try {
     const { org } = await getOrCreateOrgAndUser();
     const { provider, endpoint, model, apiKey, enabled } = req.body;
-    if (!provider) return res.status(400).json({ error: { code: "INVALID_INPUT", message: "provider is required" } });
     const cfg = {
-      provider,
+      provider: provider || null,
       endpoint: endpoint || null,
       model: model || null,
       apiKey: apiKey || null,
-      enabled: enabled !== undefined ? Boolean(enabled) : true,
+      enabled: enabled !== undefined ? Boolean(enabled) : Boolean(provider),
     };
     await prisma.setting.upsert({
       where: { organizationId_key: { organizationId: org.id, key: OCR_CONFIG_KEY } },
       update: { value: JSON.stringify(cfg) },
       create: { organizationId: org.id, key: OCR_CONFIG_KEY, value: JSON.stringify(cfg) },
     });
-    res.json({ provider: cfg.provider, endpoint: cfg.endpoint, model: cfg.model, enabled: cfg.enabled });
+    res.json({ provider: cfg.provider, endpoint: cfg.endpoint, model: cfg.model, enabled: cfg.enabled, configured: Boolean(cfg.apiKey && cfg.provider) });
   } catch (e) { next(e); }
 });

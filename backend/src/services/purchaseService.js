@@ -360,6 +360,24 @@ export async function deletePurchasePayment(organizationId, paymentId) {
  * CANCELLED purchase is retained together with its reversing stock movements
  * so the inventory history stays explainable.
  */
+export async function checkDuplicatePurchase(organizationId, supplierId, supplierInvoiceNo, invoiceDate) {
+  if (!supplierId || !supplierInvoiceNo) return { duplicate: false };
+  const where = { organizationId, supplierId, supplierInvoiceNo };
+  if (invoiceDate) {
+    const start = new Date(invoiceDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(invoiceDate);
+    end.setHours(23, 59, 59, 999);
+    where.invoiceDate = { gte: start, lte: end };
+  }
+  const existing = await prisma.purchaseInvoice.findFirst({
+    where,
+    select: { id: true, internalNumber: true, supplierInvoiceNo: true, invoiceDate: true, status: true, grandTotal: true },
+  });
+  if (existing) return { duplicate: true, existing };
+  return { duplicate: false };
+}
+
 export async function deletePurchaseInvoice(id, organizationId) {
   const existing = await prisma.purchaseInvoice.findFirst({
     where: { id, organizationId },
