@@ -271,7 +271,8 @@ body { min-width: 320px; }
 @media (max-width: 700px) { .invoice-ref-grid { grid-template-columns: 1fr; } }
 
 .inline-quick-add { display: flex; gap: 6px; align-items: flex-end; }
-.inline-quick-add select { flex: 1; }
+.inline-quick-add select { flex: 1; min-width: 0; }
+.inline-quick-add .btn { white-space: nowrap; flex-shrink: 0; }
 
 .quick-add-modal { max-width: 520px; }
 .quick-add-modal .form-group { margin-bottom: 8px; }
