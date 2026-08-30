@@ -98,6 +98,17 @@ salesRouter.get("/:id", async (req, res, next) => {
 
 salesRouter.post("/", async (req, res, next) => {
   try {
+    // A GST Sales Invoice must never be created as Non-GST; that belongs to the
+    // separate Non-GST Bill module. Applied here on the interactive create route
+    // only, so the Excel import path and historical records are unaffected.
+    if (req.body?.taxMode === "NON_GST") {
+      return res.status(400).json({
+        error: {
+          code: "INVALID_TAX_MODE",
+          message: "A GST Sales Invoice cannot use Non-GST tax mode. Use the Non-GST Bill module instead.",
+        },
+      });
+    }
     const { org } = await getOrCreateOrgAndUser();
     const invoice = await createSalesInvoice(org.id, req.body);
     res.status(201).json(invoice);

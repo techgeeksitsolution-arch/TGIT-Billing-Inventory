@@ -5,8 +5,10 @@ import { applyRoundOff, ROUND_OFF_MODES, taxPercent, fmtPercent } from "../lib/i
 import QuickAddCustomer from "./QuickAddCustomer.jsx";
 
 const EMPTY_ITEM = { productId: "", serviceId: "", description: "", hsnSac: "", quantity: 1, unitRate: 0, taxRate: "", uom: "Nos" };
+// This is the GST Sales Invoice form, so Non-GST is deliberately not offered.
+// Non-GST documents belong to the separate Non-GST Bill module.
+// Historical invoices already stored as NON_GST still render (see the select).
 const TAX_MODES = [
-  { value: "NON_GST", label: "Non-GST" },
   { value: "INTRA_STATE_GST", label: "Intra-State GST (CGST + SGST)" },
   { value: "INTER_STATE_GST", label: "Inter-State GST (IGST)" },
   { value: "EXEMPT", label: "Exempt" },
@@ -49,7 +51,7 @@ export function SalesForm() {
     customerId: "",
     invoiceDate: new Date().toISOString().split("T")[0],
     workOrderNo: "",
-    taxMode: "NON_GST",
+    taxMode: "INTRA_STATE_GST",
     placeOfSupply: "",
     invoiceNumberMode: "AUTO",
     invoiceNumber: "",
@@ -257,6 +259,11 @@ export function SalesForm() {
           <div className="form-group">
             <label>Tax Mode</label>
             <select value={form.taxMode} onChange={(e) => setForm({ ...form, taxMode: e.target.value })}>
+              {/* Legacy records stored as NON_GST must still display their real
+                  value instead of silently appearing as something else. */}
+              {form.taxMode === "NON_GST" && (
+                <option value="NON_GST" disabled>Non-GST (legacy record)</option>
+              )}
               {TAX_MODES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>

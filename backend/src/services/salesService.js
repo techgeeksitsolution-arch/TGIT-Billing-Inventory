@@ -146,22 +146,25 @@ export async function createSalesInvoice(organizationId, data) {
     if (!invoiceNumber) throw statusError("Invoice number is required in manual mode", 400, "MISSING_INVOICE_NUMBER");
     const dup = await prisma.salesInvoice.findFirst({ where: { organizationId: orgId, invoiceNumber } });
     if (dup) throw statusError(`Invoice number "${invoiceNumber}" already exists`, 400, "DUPLICATE_INVOICE_NUMBER");
+    // A manually typed number must NOT advance the AUTO counter. Previously this
+    // did lastNumber = max(lastNumber, typedNumber), so one stray entry such as
+    // TGIT/8814/26-27 permanently pushed every future AUTO number into the 8800s.
+    // The AUTO sequence is now owned solely by getNextSalesNumber(). Duplicates
+    // remain blocked by the explicit check above and by the unique constraint.
     const m = invoiceNumber.match(/^(.*)\/(\d+)\/(.*)$/);
     if (m) {
       const prefix = m[1];
-      const num = parseInt(m[2], 10);
       const fy = m[3];
+      // Only seed a sequence row if none exists yet for this financial year,
+      // so a fresh year still starts from a sane value.
       const existingSeq = await prisma.documentSequence.findUnique({
         where: { organizationId_sequenceType_financialYear: { organizationId: orgId, sequenceType: "SALES", financialYear: fy } },
       });
-      const nextNum = existingSeq ? Math.max(existingSeq.lastNumber, num) : num;
-      await prisma.documentSequence.upsert({
-        where: {
-          organizationId_sequenceType_financialYear: { organizationId: orgId, sequenceType: "SALES", financialYear: fy },
-        },
-        update: { prefix, lastNumber: nextNum },
-        create: { organizationId: orgId, sequenceType: "SALES", financialYear: fy, prefix, lastNumber: num },
-      });
+      if (!existingSeq) {
+        await prisma.documentSequence.create({
+          data: { organizationId: orgId, sequenceType: "SALES", financialYear: fy, prefix, lastNumber: 0 },
+        });
+      }
     }
   } else {
     invoiceNumber = await getNextSalesNumber(orgId);
