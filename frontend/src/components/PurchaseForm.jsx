@@ -221,20 +221,20 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
         <h3>Items</h3>
         <table className="data-table">
           <thead>
-            <tr><th style={{ width: 200 }}>Product</th><th>Description</th><th>HSN</th><th>UOM</th><th>Qty</th><th>Unit Price</th><th>Disc</th><th>Tax %</th><th>Total</th><th></th></tr>
+            <tr><th style={{ width: 200 }}>Product</th><th>Description</th><th>HSN</th><th>UOM</th><th>Qty</th><th>Unit Price</th><th>DISC (%)</th><th>Tax %</th><th>Total</th><th></th></tr>
           </thead>
           <tbody>
             {items.map((it, idx) => (
               <tr key={idx}>
                 <td><select value={it.productId} onChange={(e) => selectProduct(idx, e.target.value)}><option value="">—</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
                 <td><input value={it.description} onChange={(e) => updateItem(idx, "description", e.target.value)} /></td>
-                <td><input style={{ width: 90 }} value={it.hsnCode} onChange={(e) => updateItem(idx, "hsnCode", e.target.value)} /></td>
-                <td><input style={{ width: 70 }} value={it.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} /></td>
-                <td><input style={{ width: 70 }} type="number" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} /></td>
-                <td><input style={{ width: 100 }} type="number" value={it.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} /></td>
-                <td><input style={{ width: 70 }} type="number" value={it.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} /></td>
+                <td><input value={it.hsnCode} onChange={(e) => updateItem(idx, "hsnCode", e.target.value)} /></td>
+                <td><input value={it.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} /></td>
+                <td><input type="number" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} /></td>
+                <td><input type="number" value={it.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} /></td>
+                <td><input type="number" value={it.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} /></td>
                 <td>
-                  <select style={{ width: 80 }} value={it.taxRatePercent ? String(it.taxRatePercent) : ""} onChange={(e) => updateItem(idx, "taxRatePercent", e.target.value === "" ? 0 : Number(e.target.value))}>
+                  <select value={it.taxRatePercent ? String(it.taxRatePercent) : ""} onChange={(e) => updateItem(idx, "taxRatePercent", e.target.value === "" ? 0 : Number(e.target.value))}>
                     <option value="">Auto</option>
                     {taxRates.map((t) => <option key={t.id} value={String(t.rate)}>{t.rate}%</option>)}
                   </select>
