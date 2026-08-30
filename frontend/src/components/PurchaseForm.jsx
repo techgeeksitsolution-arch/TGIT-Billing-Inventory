@@ -219,9 +219,10 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
 
       <div className="form-card">
         <h3>Items</h3>
+        <div style={{ overflowX: "auto" }}>
         <table className="data-table">
           <thead>
-            <tr><th style={{ width: 200 }}>Product</th><th>Description</th><th>HSN</th><th>UOM</th><th>Qty</th><th>Unit Price</th><th>DISC (%)</th><th>Tax %</th><th>Total</th><th></th></tr>
+            <tr><th>Product</th><th>Description</th><th>HSN</th><th>UOM</th><th>Qty</th><th>Unit Price</th><th>DISC (%)</th><th>Tax %</th><th>Total</th><th></th></tr>
           </thead>
           <tbody>
             {items.map((it, idx) => (
@@ -245,6 +246,7 @@ export default function PurchaseForm({ purchaseId, onSaved }) {
             ))}
           </tbody>
         </table>
+        </div>
         <button className="btn btn-sm" onClick={addItem}>+ Add Item</button>
       </div>
 
