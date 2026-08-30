@@ -380,3 +380,41 @@ export async function cancelSalesInvoice(id, organizationId) {
     });
   });
 }
+
+/**
+ * Deletes a sales invoice.
+ *
+ * Only DRAFT invoices may be removed. A CONFIRMED invoice has been issued and
+ * has moved stock, so it must be cancelled (which reverses the stock) rather
+ * than erased. A CANCELLED invoice is deliberately retained: GST requires the
+ * cancelled number to remain traceable in the series.
+ */
+export async function deleteSalesInvoice(id, organizationId) {
+  const existing = await prisma.salesInvoice.findFirst({
+    where: { id, organizationId },
+    select: { id: true, invoiceNumber: true, status: true },
+  });
+  if (!existing) throw statusError("Invoice not found", 404, "NOT_FOUND");
+
+  if (existing.status === "CONFIRMED") {
+    throw statusError(
+      `Invoice ${existing.invoiceNumber} is finalized and cannot be deleted. Cancel it first, which reverses the stock and keeps the number in the audit trail.`,
+      400,
+      "DELETE_NOT_ALLOWED",
+    );
+  }
+  if (existing.status === "CANCELLED") {
+    throw statusError(
+      `Invoice ${existing.invoiceNumber} is cancelled and is retained for GST audit purposes. Cancelled invoice numbers cannot be erased.`,
+      400,
+      "DELETE_NOT_ALLOWED",
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // A draft should not have movements; clear defensively so no orphan remains.
+    await tx.stockMovement.deleteMany({ where: { referenceType: "SALES_INVOICE", referenceId: id } });
+    await tx.salesInvoice.delete({ where: { id } }); // items cascade
+    return { id, invoiceNumber: existing.invoiceNumber, deleted: true };
+  });
+}

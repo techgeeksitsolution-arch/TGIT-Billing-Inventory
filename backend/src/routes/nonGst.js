@@ -6,6 +6,7 @@ import {
   updateNonGstBill,
   finalizeNonGstBill,
   cancelNonGstBill,
+  deleteNonGstBill,
 } from "../services/nonGstService.js";
 
 export const nonGstRouter = Router();
@@ -57,3 +58,9 @@ async function getOrgContext() {
   const { getOrCreateOrgAndUser } = await import("../db.js");
   return getOrCreateOrgAndUser();
 }
+
+nonGstRouter.delete("/:id", asyncHandler(async (req, res) => {
+  const { org } = await getOrgContext();
+  const result = await deleteNonGstBill(req.params.id, org.id);
+  res.json(result);
+}));

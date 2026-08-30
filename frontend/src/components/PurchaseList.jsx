@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import PurchaseForm from "./PurchaseForm.jsx";
 import PurchasePreview from "./PurchasePreview.jsx";
 import ImportModal from "./ImportModal.jsx";
+import { apiGet } from "../api";
+import { useDeleteDocument } from "../lib/useDeleteDocument.js";
 
 export function PurchaseList() {
   const [view, setView] = useState("list");
@@ -12,17 +14,27 @@ export function PurchaseList() {
   const [statusFilter, setStatusFilter] = useState("");
   const [showImport, setShowImport] = useState(false);
 
+  const [loadError, setLoadError] = useState(null);
+
   const load = async () => {
     setLoading(true);
+    setLoadError(null);
     const q = [];
     if (search) q.push(`search=${encodeURIComponent(search)}`);
     if (statusFilter) q.push(`status=${statusFilter}`);
-    const res = await fetch(`/api/v1/purchases${q.length ? "?" + q.join("&") : ""}`);
-    const data = await res.json();
-    setPurchases(data.items || []);
-    setLoading(false);
+    try {
+      const data = await apiGet(`/purchases${q.length ? "?" + q.join("&") : ""}`);
+      setPurchases(data.items || []);
+    } catch (e) {
+      setPurchases([]);
+      setLoadError(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { load(); }, []);
+
+  const del = useDeleteDocument({ basePath: "/purchases", label: "purchase", onDeleted: load });
 
   if (view === "form") return <PurchaseForm purchaseId={pid} onSaved={(id) => { if (id) { setPid(id); setView("preview"); } else setView("list"); }} />;
   if (view === "preview") return <PurchasePreview purchaseId={pid} onBack={() => { setView("list"); load(); }} onEdit={(id) => { setPid(id); setView("form"); }} onChanged={() => load()} />;
@@ -38,6 +50,14 @@ export function PurchaseList() {
       </div>
 
       {showImport && <ImportModal type="purchases" onClose={() => setShowImport(false)} onImported={() => load()} />}
+
+      {del.message && (
+        <div className={del.message.type === "success" ? "success-msg" : "error-msg"} onClick={del.clearMessage}>
+          {del.message.text}
+        </div>
+      )}
+      {loadError && <div className="error-msg">Unable to load purchases — {loadError}</div>}
+
       <div className="filters">
         <input className="search-input" placeholder="Search invoice / supplier" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); }}>
@@ -61,7 +81,19 @@ export function PurchaseList() {
                 <td>{p.status}</td>
                 <td><span className={`badge ${(p.paymentStatus || "UNPAID").toLowerCase()}`}>{p.paymentStatus || "UNPAID"}</span></td>
                 <td>{Number(p.grandTotal).toFixed(2)}</td>
-                <td><button className="btn btn-sm">View</button></td>
+                <td className="actions-cell" onClick={(e) => e.stopPropagation()}>
+                  <button className="btn btn-sm" onClick={() => { setPid(p.id); setView("preview"); }}>View</button>
+                  {p.status === "DRAFT" && (
+                    <button
+                      className="btn btn-sm btn-danger"
+                      disabled={del.isDeleting(p.id)}
+                      onClick={() => del.remove(p.id, p.internalNumber)}
+                      title="Delete this draft purchase"
+                    >
+                      {del.isDeleting(p.id) ? "Deleting..." : "Delete"}
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

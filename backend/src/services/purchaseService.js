@@ -351,3 +351,41 @@ export async function deletePurchasePayment(organizationId, paymentId) {
   await recomputePayment(payment.purchaseId);
   return { ok: true };
 }
+
+/**
+ * Deletes a purchase invoice.
+ *
+ * Only DRAFT purchases may be removed. A CONFIRMED purchase has already added
+ * stock, so it must be cancelled (which reverses the stock) instead. A
+ * CANCELLED purchase is retained together with its reversing stock movements
+ * so the inventory history stays explainable.
+ */
+export async function deletePurchaseInvoice(id, organizationId) {
+  const existing = await prisma.purchaseInvoice.findFirst({
+    where: { id, organizationId },
+    select: { id: true, internalNumber: true, status: true },
+  });
+  if (!existing) {
+    throw Object.assign(new Error("Purchase not found"), { statusCode: 404, code: "NOT_FOUND" });
+  }
+
+  if (existing.status === "CONFIRMED") {
+    throw Object.assign(
+      new Error(`Purchase ${existing.internalNumber} is finalized and cannot be deleted. Cancel it first so the stock it added is reversed.`),
+      { statusCode: 400, code: "DELETE_NOT_ALLOWED" },
+    );
+  }
+  if (existing.status === "CANCELLED") {
+    throw Object.assign(
+      new Error(`Purchase ${existing.internalNumber} is cancelled and is retained so its stock reversal stays traceable.`),
+      { statusCode: 400, code: "DELETE_NOT_ALLOWED" },
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.stockMovement.deleteMany({ where: { referenceType: "PURCHASE_INVOICE", referenceId: id } });
+    // Attachments, payments and items are all onDelete: Cascade.
+    await tx.purchaseInvoice.delete({ where: { id } });
+    return { id, internalNumber: existing.internalNumber, deleted: true };
+  });
+}

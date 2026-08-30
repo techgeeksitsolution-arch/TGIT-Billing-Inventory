@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiGet } from "../api";
+import { useDeleteDocument } from "../lib/useDeleteDocument.js";
 
 const STATUS_LABELS = {
   DRAFT: { label: "Draft", color: "#f0ad4e" },
@@ -17,15 +19,19 @@ export function NonGstBillList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     setLoading(true);
+    setError(null);
     const query = `?page=${page}&limit=20${status ? `&status=${status}` : ""}${search ? `&search=${encodeURIComponent(search)}` : ""}`;
-    fetch(`/api/v1/nongst${query}`)
-      .then(r => r.json())
+    return apiGet(`/nongst${query}`)
       .then(setData)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [page, status, search]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const del = useDeleteDocument({ basePath: "/nongst", label: "bill", onDeleted: load });
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -43,6 +49,12 @@ export function NonGstBillList() {
           </button>
         </div>
       </div>
+
+      {del.message && (
+        <div className={del.message.type === "success" ? "success-msg" : "error-msg"} onClick={del.clearMessage}>
+          {del.message.text}
+        </div>
+      )}
 
       <div className="filters">
         <form onSubmit={handleSearch} className="search-form">
@@ -99,6 +111,15 @@ export function NonGstBillList() {
                       <button className="btn btn-sm btn-outline" onClick={() => navigate(`/nongst/${b.id}`)}>View</button>
                       {b.status === "DRAFT" && (
                         <button className="btn btn-sm btn-outline" onClick={() => navigate(`/nongst/${b.id}/edit`)}>Edit</button>
+                      )}
+                      {b.status !== "CONFIRMED" && (
+                        <button
+                          className="btn btn-sm btn-danger"
+                          disabled={del.isDeleting(b.id)}
+                          onClick={() => del.remove(b.id, b.billNumber)}
+                        >
+                          {del.isDeleting(b.id) ? "Deleting..." : "Delete"}
+                        </button>
                       )}
                     </td>
                   </tr>

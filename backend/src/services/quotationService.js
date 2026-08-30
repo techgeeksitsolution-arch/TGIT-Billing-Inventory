@@ -282,3 +282,31 @@ export async function cancelQuotation(id, organizationId) {
     include: { customer: true, items: true },
   });
 }
+
+/**
+ * Deletes a quotation.
+ *
+ * A quotation is a commercial offer, not a statutory document, and it never
+ * moves stock, so any status may be removed. The one exception is a quotation
+ * that has already been converted into a sales invoice: deleting it would
+ * orphan the link recorded on the invoice.
+ */
+export async function deleteQuotation(id, organizationId) {
+  const existing = await prisma.quotation.findFirst({
+    where: { id, organizationId },
+    select: { id: true, quotationNumber: true, convertedInvoiceId: true, convertedInvoiceNumber: true },
+  });
+  if (!existing) {
+    throw Object.assign(new Error("Quotation not found"), { statusCode: 404, code: "NOT_FOUND" });
+  }
+
+  if (existing.convertedInvoiceId) {
+    throw Object.assign(
+      new Error(`Quotation ${existing.quotationNumber} was converted to invoice ${existing.convertedInvoiceNumber || existing.convertedInvoiceId} and cannot be deleted.`),
+      { statusCode: 400, code: "DELETE_NOT_ALLOWED" },
+    );
+  }
+
+  await prisma.quotation.delete({ where: { id } }); // items cascade
+  return { id, quotationNumber: existing.quotationNumber, deleted: true };
+}

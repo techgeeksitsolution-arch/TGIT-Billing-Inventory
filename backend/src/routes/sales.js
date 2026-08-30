@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { listSalesInvoices, getSalesInvoice, createSalesInvoice, updateSalesInvoice, finalizeSalesInvoice, cancelSalesInvoice, checkStockAvailability } from "../services/salesService.js";
+import { listSalesInvoices, getSalesInvoice, createSalesInvoice, updateSalesInvoice, finalizeSalesInvoice, cancelSalesInvoice, deleteSalesInvoice, checkStockAvailability } from "../services/salesService.js";
 import { prisma, getOrCreateOrgAndUser } from "../db.js";
 import { uploadExcel } from "../lib/upload.js";
 import {
@@ -134,6 +134,14 @@ salesRouter.post("/:id/finalize", async (req, res, next) => {
     }
     const invoice = await finalizeSalesInvoice(req.params.id, org.id, opts);
     res.json(invoice);
+  } catch (e) { next(e); }
+});
+
+salesRouter.delete("/:id", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const result = await deleteSalesInvoice(req.params.id, org.id);
+    res.json(result);
   } catch (e) { next(e); }
 });
 

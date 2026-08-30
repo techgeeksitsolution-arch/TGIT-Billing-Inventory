@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useFetch } from "../api";
+import { useDeleteDocument } from "../lib/useDeleteDocument.js";
 
 const STATUS_LABELS = {
   DRAFT: { label: "Draft", color: "#f0ad4e" },
@@ -16,7 +17,8 @@ export function QuotationList() {
   const [searchInput, setSearchInput] = useState("");
 
   const query = `?page=${page}&limit=20${status ? `&status=${status}` : ""}${search ? `&search=${encodeURIComponent(search)}` : ""}`;
-  const { data, loading, error } = useFetch(`/quotations${query}`);
+  const { data, loading, error, refetch } = useFetch(`/quotations${query}`);
+  const del = useDeleteDocument({ basePath: "/quotations", label: "quotation", onDeleted: refetch });
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -32,6 +34,12 @@ export function QuotationList() {
           + New Quotation
         </button>
       </div>
+
+      {del.message && (
+        <div className={del.message.type === "success" ? "success-msg" : "error-msg"} onClick={del.clearMessage}>
+          {del.message.text}
+        </div>
+      )}
 
       <div className="filters">
         <form onSubmit={handleSearch} className="search-form">
@@ -92,6 +100,15 @@ export function QuotationList() {
                       <button className="btn btn-sm btn-outline" onClick={() => navigate(`/quotations/${q.id}`)}>View</button>
                       {q.status === "DRAFT" && (
                         <button className="btn btn-sm btn-outline" onClick={() => navigate(`/quotations/${q.id}/edit`)}>Edit</button>
+                      )}
+                      {!q.convertedInvoiceId && (
+                        <button
+                          className="btn btn-sm btn-danger"
+                          disabled={del.isDeleting(q.id)}
+                          onClick={() => del.remove(q.id, q.quotationNumber)}
+                        >
+                          {del.isDeleting(q.id) ? "Deleting..." : "Delete"}
+                        </button>
                       )}
                     </td>
                   </tr>

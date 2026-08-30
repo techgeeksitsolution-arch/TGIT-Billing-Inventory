@@ -85,6 +85,13 @@ export async function apiGet(url) {
   return parsed.data;
 }
 
+export async function apiDelete(url) {
+  const res = await fetch(`${API}${url}`, { method: "DELETE" });
+  const parsed = await readResponse(res);
+  if (!parsed.ok) throw toError(parsed);
+  return parsed.data;
+}
+
 export async function apiPost(url, body) {
   const res = await fetch(`${API}${url}`, {
     method: "POST",

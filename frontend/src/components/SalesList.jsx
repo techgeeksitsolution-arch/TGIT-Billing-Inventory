@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useFetch } from "../api";
+import { useDeleteDocument } from "../lib/useDeleteDocument.js";
 import ImportModal from "./ImportModal.jsx";
 import { formatDate } from "../lib/format.js";
 
@@ -20,6 +21,7 @@ export function SalesList() {
 
   const query = `?page=${page}&limit=20${status ? `&status=${status}` : ""}${search ? `&search=${encodeURIComponent(search)}` : ""}`;
   const { data, loading, error, refetch } = useFetch(`/sales${query}`);
+  const del = useDeleteDocument({ basePath: "/sales", label: "invoice", onDeleted: refetch });
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -40,6 +42,12 @@ export function SalesList() {
       </div>
 
       {showImport && <ImportModal type="sales" onClose={() => setShowImport(false)} onImported={() => refetch && refetch()} />}
+
+      {del.message && (
+        <div className={del.message.type === "success" ? "success-msg" : "error-msg"} onClick={del.clearMessage}>
+          {del.message.text}
+        </div>
+      )}
 
       <div className="filters">
         <form onSubmit={handleSearch} className="search-form">
@@ -98,6 +106,15 @@ export function SalesList() {
                       <button className="btn btn-sm btn-outline" onClick={() => navigate(`/sales/${inv.id}`)}>View</button>
                       {inv.status === "DRAFT" && (
                         <button className="btn btn-sm btn-outline" onClick={() => navigate(`/sales/${inv.id}/edit`)}>Edit</button>
+                      )}
+                      {inv.status === "DRAFT" && (
+                        <button
+                          className="btn btn-sm btn-danger"
+                          disabled={del.isDeleting(inv.id)}
+                          onClick={() => del.remove(inv.id, inv.invoiceNumber)}
+                        >
+                          {del.isDeleting(inv.id) ? "Deleting..." : "Delete"}
+                        </button>
                       )}
                     </td>
                   </tr>

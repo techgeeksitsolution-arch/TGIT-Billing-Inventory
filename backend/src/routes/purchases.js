@@ -1,7 +1,7 @@
 import { Router } from "express";
 import {
   listPurchases, getPurchase, createPurchase, updatePurchase, finalizePurchase, cancelPurchase,
-  addPurchasePayment, listPurchasePayments, deletePurchasePayment,
+  addPurchasePayment, listPurchasePayments, deletePurchasePayment, deletePurchaseInvoice,
 } from "../services/purchaseService.js";
 import { getOrCreateOrgAndUser, prisma } from "../db.js";
 import { uploadExcel, uploadAny } from "../lib/upload.js";
@@ -259,3 +259,11 @@ purchasesRouter.post("/ocr/:jobId/apply", async (req, res, next) => {
 });
 
 export { getOcrConfig, saveOcrConfig, OCR_CONFIG_KEY };
+
+purchasesRouter.delete("/:id", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const result = await deletePurchaseInvoice(req.params.id, org.id);
+    res.json(result);
+  } catch (e) { next(e); }
+});

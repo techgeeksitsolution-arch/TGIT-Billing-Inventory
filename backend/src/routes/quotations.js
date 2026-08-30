@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { listQuotations, getQuotation, createQuotation, updateQuotation, finalizeQuotation, cancelQuotation, convertQuotationToSales } from "../services/quotationService.js";
+import { listQuotations, getQuotation, createQuotation, updateQuotation, finalizeQuotation, cancelQuotation, convertQuotationToSales, deleteQuotation } from "../services/quotationService.js";
 import { getOrCreateOrgAndUser } from "../db.js";
 
 export const quotationsRouter = Router();
@@ -67,5 +67,13 @@ quotationsRouter.post("/:id/convert", async (req, res, next) => {
       invoiceNumber: req.body?.invoiceNumber,
     });
     res.status(201).json(result);
+  } catch (e) { next(e); }
+});
+
+quotationsRouter.delete("/:id", async (req, res, next) => {
+  try {
+    const { org } = await getOrCreateOrgAndUser();
+    const result = await deleteQuotation(req.params.id, org.id);
+    res.json(result);
   } catch (e) { next(e); }
 });

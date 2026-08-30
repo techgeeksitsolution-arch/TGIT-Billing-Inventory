@@ -210,3 +210,30 @@ export async function cancelNonGstBill(id, organizationId) {
     include: { customer: true, items: true },
   });
 }
+
+/**
+ * Deletes a Non-GST bill.
+ *
+ * Non-GST bills never move stock. A DRAFT or CANCELLED bill may be removed; a
+ * CONFIRMED bill has been issued to a customer and must be cancelled first so
+ * the number is not silently reused.
+ */
+export async function deleteNonGstBill(id, organizationId) {
+  const existing = await prisma.nonGstBill.findFirst({
+    where: { id, organizationId },
+    select: { id: true, billNumber: true, status: true },
+  });
+  if (!existing) {
+    throw Object.assign(new Error("Bill not found"), { statusCode: 404, code: "NOT_FOUND" });
+  }
+
+  if (existing.status === "CONFIRMED") {
+    throw Object.assign(
+      new Error(`Bill ${existing.billNumber} is finalized and cannot be deleted. Cancel it first.`),
+      { statusCode: 400, code: "DELETE_NOT_ALLOWED" },
+    );
+  }
+
+  await prisma.nonGstBill.delete({ where: { id } }); // items cascade
+  return { id, billNumber: existing.billNumber, deleted: true };
+}
