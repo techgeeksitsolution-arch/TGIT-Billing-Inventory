@@ -2,10 +2,6 @@
   "name": "tgit-billing-inventory",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
   "scripts": {
     "dev": "node node_modules/concurrently/dist/bin/concurrently.js \"node backend/src/server.js\" \"node node_modules/vite/bin/vite.js --config frontend/vite.config.js\"",
     "build": "node node_modules/prisma/build/index.js generate && node node_modules/vite/bin/vite.js build --config frontend/vite.config.js",
@@ -17,15 +13,29 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
-    "concurrently": "^9.1.2",
-    "vite": "^6.1.0"
+    "concurrently": "^9.1.2"
   },
   "allowScripts": {
     "@prisma/client@6.19.3": true,
     "prisma@6.19.3": true
   },
   "dependencies": {
+    "@prisma/client": "^6.4.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "exceljs": "^4.4.0",
-    "multer": "^2.2.0"
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "multer": "^2.2.0",
+    "prisma": "^6.4.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.18.2",
+    "vite": "^6.1.0",
+    "zod": "^3.24.2"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma"
   }
 }
