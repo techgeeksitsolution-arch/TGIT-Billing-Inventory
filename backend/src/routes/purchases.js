@@ -169,7 +169,7 @@ purchasesRouter.post("/upload-ocr", uploadAny, async (req, res, next) => {
 
     try {
       const ocrResult = await extractTextFromImage(org.id, base64Data, req.file.mimetype);
-      if (ocrResult.status === "OK" && ocrResult.text) {
+      if (ocrResult.status === "OK" && ocrResult.text && ocrResult.text.trim()) {
         rawText = ocrResult.text;
         ocrStatus = "EXTRACTED";
         parseResult = parseOcrText(rawText);
@@ -178,6 +178,12 @@ purchasesRouter.post("/upload-ocr", uploadAny, async (req, res, next) => {
         parseResult = parseOcrText("");
       } else if (ocrResult.status === "UNKNOWN_PROVIDER") {
         ocrStatus = "NOT_CONFIGURED";
+        parseResult = parseOcrText("");
+      } else if (ocrResult.status === "OCR_FAILED") {
+        ocrStatus = "OCR_FAILED";
+        parseResult = parseOcrText("");
+      } else {
+        ocrStatus = "OCR_FAILED";
         parseResult = parseOcrText("");
       }
     } catch (ocrErr) {

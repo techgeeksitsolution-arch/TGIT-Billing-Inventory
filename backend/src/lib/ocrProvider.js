@@ -354,6 +354,22 @@ function findAmount(text, labelPatterns) {
   return isNaN(n) ? null : n;
 }
 
+function findCompanyName(text) {
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    if (/^(INVOICE|TAX\s*INVOICE|BILL|PURCHASE\s*ORDER)/i.test(line)) continue;
+    if (/^(Bill\s*To|Ship\s*To|Item|Product|Description|Quantity|Amount|Summary|Note|Signature|UDYAM)/i.test(line)) continue;
+    if (/^(Here|I\s|The\s|This|Please)/i.test(line)) continue;
+    if (/^[\d\s\-+()]{8,}$/.test(line)) continue;
+    if (/^[\w.+-]+@[\w.-]+\.\w{2,}$/.test(line)) continue;
+    if (/^\d{4,8}$/.test(line)) continue;
+    if (line.length < 3 || line.length > 60) continue;
+    if (/^[A-Z][A-Za-z\s&.\-']+(?:Pvt|Ltd|LLP|Inc|Co|Solutions?|Enterprises?|Traders?|Services?|Company|Trading)\.?$/i.test(line)) return line;
+    if (/^[A-Z][A-Za-z\s&.\-']{5,50}$/.test(line) && !/^\d/.test(line)) return line;
+  }
+  return null;
+}
+
 function extractGstin(text) {
   const m = text.match(/(?:GSTIN|GST\s*(?:No|Number|#)?|UIN)\s*[:.\-]?\s*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z][Z\d][0-9A-Z])/i);
   return m ? m[1].toUpperCase() : null;
@@ -367,15 +383,17 @@ function extractStateCode(text) {
 }
 
 function extractInvoiceNumber(text) {
-  return findField(text, [
-    /(?:Invoice\s*(?:No|Number|#|\.))\s*[:.\-]?\s*([A-Z0-9][\w\/\-]+)/i,
-    /(?:Bill\s*(?:No|Number|#|\.))\s*[:.\-]?\s*([A-Z0-9][\w\/\-]+)/i,
-    /(?:Inv\s*(?:No|#))\s*[:.\-]?\s*([A-Z0-9][\w\/\-]+)/i,
+  const cleaned = text.replace(/\|/g, " ");
+  return findField(cleaned, [
+    /(?:Invoice\s*(?:No|Number|#|\.))\s*[:.\-\s:]*([A-Z0-9][\w\/\-]+)/i,
+    /(?:Bill\s*(?:No|Number|#|\.))\s*[:.\-\s:]*([A-Z0-9][\w\/\-]+)/i,
+    /(?:Inv\s*(?:No|#))\s*[:.\-\s:]*([A-Z0-9][\w\/\-]+)/i,
   ]);
 }
 
 function extractDate(text, labelPatterns) {
-  const raw = findField(text, labelPatterns);
+  const cleaned = text.replace(/\|/g, " ");
+  const raw = findField(cleaned, labelPatterns);
   if (!raw) return null;
   const d = new Date(raw);
   if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
@@ -385,6 +403,16 @@ function extractDate(text, labelPatterns) {
     if (yy.length === 2) yy = "20" + yy;
     const d2 = new Date(`${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`);
     if (!isNaN(d2.getTime())) return d2.toISOString().slice(0, 10);
+  }
+  const m3 = raw.match(/(\d{1,2})[\/\-.](\w+)[\/\-.](\d{2,4})/);
+  if (m3) {
+    const months = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+    const monKey = m3[2].toLowerCase().slice(0, 3);
+    if (months[monKey]) {
+      let yy = m3[3]; if (yy.length === 2) yy = "20" + yy;
+      const d3 = new Date(`${yy}-${months[monKey]}-${m3[1].padStart(2, "0")}`);
+      if (!isNaN(d3.getTime())) return d3.toISOString().slice(0, 10);
+    }
   }
   return null;
 }
@@ -446,50 +474,100 @@ function extractHsn(text) {
 }
 
 function stripMarkdown(text) {
-  return text
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/__([^_]+)__/g, "$1")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/`([^`]+)`/g, "$1");
+  let s = text;
+  s = s.replace(/<br\s*\/?>/gi, "\n");
+  s = s.replace(/<\/?div[^>]*>/gi, "");
+  s = s.replace(/<[^>]+>/g, "");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
+  s = s.replace(/__([^_]+)__/g, "$1");
+  s = s.replace(/^#{1,6}\s+/gm, "");
+  s = s.replace(/`([^`]+)`/g, "$1");
+  s = s.replace(/^\|/gm, "");
+  s = s.replace(/\|$/gm, "");
+  s = s.replace(/\|/g, " ");
+  s = s.replace(/^[-:]{3,}\s*$/gm, "");
+  s = s.replace(/^[\s*]{3,}\s*$/gm, "");
+  s = s.replace(/\n{3,}/g, "\n\n");
+  return s;
+}
+
+function cleanCellHtml(s) {
+  return s.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+}
+
+function parseIndianNumber(s) {
+  if (!s) return 0;
+  let cleaned = s.replace(/[₹$]/g, "").replace(/,/g, "").trim();
+  cleaned = cleaned.replace(/[A-Za-z]+/g, "").trim();
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+
+function detectTableColumns(headerCells) {
+  const map = { desc: -1, hsn: -1, qty: -1, rate: -1, taxable: -1, gst: -1, amount: -1, tax: -1 };
+  for (let i = 0; i < headerCells.length; i++) {
+    const c = headerCells[i].toLowerCase().replace(/[^a-z\s\/]/g, "");
+    if (/^(sr|s\/?no|#|no\.?)$/.test(c)) continue;
+    if (map.desc === -1 && /desc|product|item|particular/.test(c)) map.desc = i;
+    else if (map.hsn === -1 && /hsn|sac/.test(c)) map.hsn = i;
+    else if (map.qty === -1 && /qty|quantity|pcs|nos/.test(c)) map.qty = i;
+    else if (map.rate === -1 && /rate|price|unit\s*price/.test(c)) map.rate = i;
+    else if (map.taxable === -1 && /taxable|base|sub/.test(c)) map.taxable = i;
+    else if (map.gst === -1 && /gst|tax/.test(c)) map.gst = i;
+    else if (map.amount === -1 && /amount|total|value/.test(c)) map.amount = i;
+  }
+  if (map.amount === -1) map.amount = headerCells.length - 1;
+  if (map.desc === -1) map.desc = 0;
+  return map;
 }
 
 function extractTableItems(text) {
   const items = [];
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
   let inTable = false;
-  let headerIdx = -1;
+  let headerCells = null;
+  let colMap = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.startsWith("|") && line.endsWith("|")) {
-      const cells = line.split("|").map(c => c.trim()).filter(c => c.length > 0);
+      const cells = line.split("|").map(c => cleanCellHtml(c)).filter(c => c.length > 0);
       if (cells.length < 3) continue;
-      if (cells.some(c => /^#|no|desc|item|product|hsn|qty|quantity|rate|amount|gst|taxable|price$/i.test(c))) {
+      const isHeader = cells.some(c => /no|desc|item|product|hsn|qty|quantity|rate|amount|gst|tax|price|sac|particular/i.test(c));
+      const isSeparator = cells.every(c => /^[-:]+$/.test(c));
+      if (isSeparator) continue;
+      if (isHeader && !inTable) {
         inTable = true;
-        headerIdx = i;
+        headerCells = cells;
+        colMap = detectTableColumns(cells);
         continue;
       }
-      if (inTable && cells.some(c => /^[-:]+$/.test(c))) continue;
       if (inTable) {
-        const desc = cells[0];
-        const hsn = cells.length >= 2 ? cells[1] : null;
-        const qty = cells.length >= 3 ? cells[2] : "1";
-        const rate = cells.length >= 4 ? cells[3] : "0";
-        const taxable = cells.length >= 5 ? cells[4] : "0";
-        const gstPct = cells.length >= 6 ? cells[5] : null;
-        const amount = cells.length >= 7 ? cells[6] : cells[cells.length - 1];
-        items.push({
-          description: desc,
-          hsnCode: hsn,
-          quantity: parseFloat(qty.replace(/,/g, "")) || 1,
-          unitPrice: parseFloat(rate.replace(/,/g, "")) || 0,
-          taxableAmount: parseFloat(taxable.replace(/,/g, "")) || 0,
-          totalAmount: parseFloat(amount.replace(/,/g, "")) || 0,
-          gstPercent: gstPct,
-        });
+        const getCell = (key) => colMap[key] >= 0 && colMap[key] < cells.length ? cells[colMap[key]] : null;
+        const rawDesc = getCell("desc") || cells[colMap.desc] || "";
+        const descParts = rawDesc.split(/\n/).map(s => s.trim()).filter(Boolean);
+        const description = descParts[0] || "";
+        const embeddedHsn = rawDesc.match(/HSN\s*(?:Code)?\s*:?\s*(\d{4,8})/i);
+        const hsnCode = getCell("hsn") || (embeddedHsn ? embeddedHsn[1] : null);
+        let quantity = parseIndianNumber(getCell("qty")) || 1;
+        let unitPrice = parseIndianNumber(getCell("rate"));
+        let taxableAmount = parseIndianNumber(getCell("taxable"));
+        let totalAmount = parseIndianNumber(getCell("amount"));
+        let gstPercent = null;
+        const gstCell = getCell("gst") || getCell("tax");
+        if (gstCell) {
+          const gstMatch = gstCell.match(/(\d+(?:\.\d+)?)\s*%/);
+          if (gstMatch) gstPercent = gstMatch[1];
+        }
+        if (unitPrice === 0 && quantity > 0 && taxableAmount > 0) unitPrice = taxableAmount / quantity;
+        if (taxableAmount === 0 && unitPrice > 0 && quantity > 0) taxableAmount = unitPrice * quantity;
+        if (totalAmount === 0 && taxableAmount > 0) totalAmount = taxableAmount;
+        items.push({ description, hsnCode, quantity, unitPrice, taxableAmount, totalAmount, gstPercent });
       }
     } else {
       inTable = false;
+      headerCells = null;
+      colMap = null;
     }
   }
   return items;
@@ -506,28 +584,32 @@ export function parseOcrText(text) {
     };
   }
 
-  const clean = stripMarkdown(text);
+  let clean = stripMarkdown(text);
+  clean = clean.replace(/^Here is .+?[:.]\s*/im, "");
+  clean = clean.replace(/^I\s+(?:have|will|extracted|preserved).+$/im, "");
+  clean = clean.replace(/^\*\*\*+\s*$/gm, "");
 
   const gstin = extractGstin(clean);
   const stateCode = extractStateCode(clean);
+
   const supplierName = findField(clean, [
-    /(?:Supplier|Vendor|Seller|From|Sold\s*By|Billed\s*By)\s*[:.\-]?\s*(.{3,80})/i,
-    /^([A-Z][A-Za-z\s&]{3,60}(?:Pvt|Ltd|LLP|Inc|Co)\.?)/m,
-  ]);
+    /(?:Supplier|Vendor|Seller|From|Sold\s*By|Billed\s*By)\s*[:.\-]\s*(.{3,80})/i,
+  ]) || findCompanyName(clean);
+
   const address = findField(clean, [
-    /(?:Address|Addr)\s*[:.\-]?\s*(.{5,120})/i,
+    /(?:Address|Addr)\s*[:.\-]\s*(.{5,120})/i,
   ]);
   const state = extractState(clean);
-  const phone = findField(clean, [/(?:Phone|Tel|Mobile)\s*[:.\-]?\s*([\d\s\-+]{8,15})/i]);
-  const email = findField(clean, [/(?:Email|E-mail)\s*[:.\-]?\s*([\w.+-]+@[\w.-]+\.\w{2,})/i]);
+  const phone = findField(clean, [/(?:Phone|Tel|Mobile)\s*[:.\-]\s*([\d\s\-+]{8,15})/i]);
+  const email = findField(clean, [/(?:Email|E-mail)\s*[:.\-]\s*([\w.+-]+@[\w.-]+\.\w{2,})/i]);
 
   const supplierInvoiceNo = extractInvoiceNumber(clean);
   const invoiceDate = extractDate(clean, [
-    /(?:Invoice\s*Date|Date\s*of\s*Invoice|Bill\s*Date)\s*[:.\-]?\s*([\d\/\-.\w\s]+)/i,
+    /(?:Invoice\s*Date|Date\s*of\s*Invoice|Bill\s*Date)\s*[:.\-\s:]*([\d\/\-.\w\s]+)/i,
   ]);
-  const dueDate = extractDate(clean, [/(?:Due\s*Date|Payment\s*Due)\s*[:.\-]?\s*([\d\/\-.\w\s]+)/i]);
-  const poNo = findField(clean, [/(?:PO\s*(?:No|Number|#)|Purchase\s*Order)\s*[:.\-]?\s*([A-Z0-9][\w\/\-]+)/i]);
-  const placeOfSupply = findField(clean, [/(?:Place\s*of\s*Supply|POS)\s*[:.\-]?\s*(.{3,50})/i]);
+  const dueDate = extractDate(clean, [/(?:Due\s*Date|Payment\s*Due)\s*[:.\-\s:]*([\d\/\-.\w\s]+)/i]);
+  const poNo = findField(clean, [/(?:PO\s*(?:No|Number|#|\.?)|Purchase\s*Order|Order\s*(?:No|Number))\s*[:.\-\s:]*([A-Z0-9][\w\/\-]+)/i]);
+  const placeOfSupply = findField(clean, [/(?:Place\s*of\s*Supply|POS)\s*[:.\-\s:]*([\w\s,.-]{3,50})/i]);
 
   let items = extractTableItems(text);
   if (items.length === 0) {
@@ -535,16 +617,16 @@ export function parseOcrText(text) {
   }
 
   const taxableTotal = findAmount(clean, [
-    /(?:Taxable\s*(?:Value|Amount|Total))\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
+    /(?:Taxable\s*(?:Value|Amount|Total)|Base\s*Amount)\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
   ]);
-  const cgstTotal = findAmount(clean, [/(?:CGST|Central\s*GST)\s*(?:\([^)]*\))?\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
-  const sgstTotal = findAmount(clean, [/(?:SGST|State\s*GST)\s*(?:\([^)]*\))?\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
-  const igstTotal = findAmount(clean, [/(?:IGST|Integrated\s*GST)\s*(?:\([^)]*\))?\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
+  const cgstTotal = findAmount(clean, [/(?:CGST|Central\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
+  const sgstTotal = findAmount(clean, [/(?:SGST|State\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
+  const igstTotal = findAmount(clean, [/(?:IGST|Integrated\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
   const grandTotal = findAmount(clean, [
-    /(?:Grand\s*Total|Total\s*(?:Amount|Payable)|Amount\s*(?:Payable|Due))\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
+    /(?:Grand\s*Total|Sub\s*Total|Total\s*(?:Amount|Payable)|Amount\s*(?:Payable|Due))\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
   ]);
   const otherCharges = findAmount(clean, [/(?:Other\s*Charges?|Freight|Shipping)\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]) || 0;
-  const roundOff = findAmount(clean, [/(?:Round\s*[- ]?off)\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]) || 0;
+  const roundOff = findAmount(clean, [/(?:Round\s*[- ]?off|Adjustment\/?Round\s*off)\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]) || 0;
 
   let confidence = "HIGH";
   if (!gstin && !supplierName) confidence = "LOW";
@@ -554,18 +636,23 @@ export function parseOcrText(text) {
   return {
     supplier: { name: supplierName, address, gstin, state, stateCode, phone, email },
     invoice: { supplierInvoiceNo, invoiceDate, dueDate, poNo, placeOfSupply },
-    items: items.map(it => ({
-      description: it.description,
-      hsnCode: it.hsnCode || null,
-      quantity: it.quantity || 1,
-      unitPrice: it.unitPrice || 0,
-      taxableAmount: it.taxableAmount || 0,
-      totalAmount: it.totalAmount || 0,
-      gstPercent: it.gstPercent || null,
-      cgstRate: 0, sgstRate: 0, igstRate: 0,
-      cgstAmount: 0, sgstAmount: 0, igstAmount: 0,
-      discount: 0, uom: "Nos",
-    })),
+    items: items.filter(it => it.description && !/amount\s*in\s*words|sub\s*total|grand\s*total|balance|signature|please\s*note/i.test(it.description) && (it.unitPrice > 0 || it.totalAmount > 0 || it.hsnCode)).map(it => {
+      let desc = it.description.replace(/\*\*/g, "").replace(/HSN\s*(?:Code)?\s*:\s*\d{4,8}/gi, "").trim();
+      let hsn = it.hsnCode;
+      if (!hsn) { const m = it.description.match(/HSN\s*(?:Code)?\s*:\s*(\d{4,8})/i); if (m) hsn = m[1]; }
+      return {
+        description: desc,
+        hsnCode: hsn || null,
+        quantity: it.quantity || 1,
+        unitPrice: it.unitPrice || 0,
+        taxableAmount: it.taxableAmount || 0,
+        totalAmount: it.totalAmount || 0,
+        gstPercent: it.gstPercent || null,
+        cgstRate: 0, sgstRate: 0, igstRate: 0,
+        cgstAmount: 0, sgstAmount: 0, igstAmount: 0,
+        discount: 0, uom: "Nos",
+      };
+    }),
     totals: { taxableTotal, cgstTotal, sgstTotal, igstTotal, otherCharges, roundOff, grandTotal },
     confidence,
   };
