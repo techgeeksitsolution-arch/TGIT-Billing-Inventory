@@ -146,6 +146,11 @@ purchasesRouter.post("/upload-ocr", uploadAny, async (req, res, next) => {
 
     const base64Data = req.file.buffer.toString("base64");
 
+    const companyProfile = await prisma.companyProfile.findUnique({ where: { organizationId: org.id }, select: { state: true, gstin: true } });
+    const orgState = companyProfile?.gstin ? companyProfile.gstin.substring(0, 2) : (companyProfile?.state || "");
+    const supplierState = parseResult?.supplier?.state || "";
+    const autoTaxMode = (orgState && supplierState && orgState === supplierState) ? "INTRA_STATE_GST" : (orgState && supplierState ? "INTER_STATE_GST" : "INTRA_STATE_GST");
+
     const att = await prisma.purchaseAttachment.create({
       data: {
         organizationId: org.id,
@@ -225,7 +230,7 @@ purchasesRouter.post("/upload-ocr", uploadAny, async (req, res, next) => {
       matchedProduct = products.find(p => p.name.toLowerCase() === descLower) ||
         products.find(p => p.name.toLowerCase().includes(descLower) || descLower.includes(p.name.toLowerCase())) || null;
 
-      const taxRate = matchedProduct?.taxRate ? Number(matchedProduct.taxRate.rate) : (item.taxRate || 0);
+      const taxRate = matchedProduct?.taxRate ? Number(matchedProduct.taxRate.rate) : (Number(item.gstPercent) || 0);
       return {
         ...item,
         productId: matchedProduct?.id || null,
@@ -254,6 +259,7 @@ purchasesRouter.post("/upload-ocr", uploadAny, async (req, res, next) => {
       extracted: parseResult,
       matchedSupplier,
       matchedItems,
+      autoTaxMode,
       suppliers,
       products: products.map(p => ({
         id: p.id, name: p.name, sku: p.sku, hsnCode: p.hsnCode,

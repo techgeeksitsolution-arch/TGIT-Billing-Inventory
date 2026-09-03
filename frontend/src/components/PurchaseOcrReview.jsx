@@ -31,7 +31,7 @@ export default function PurchaseOcrReview({ ocrData, previewUrl, onSaved, onCanc
   const [supplierId, setSupplierId] = useState(ocrData.matchedSupplier?.id || "");
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState(ocrData.extracted?.invoice?.supplierInvoiceNo || "");
   const [invoiceDate, setInvoiceDate] = useState(ocrData.extracted?.invoice?.invoiceDate || new Date().toISOString().slice(0, 10));
-  const [taxMode, setTaxMode] = useState("INTRA_STATE_GST");
+  const [taxMode, setTaxMode] = useState(ocrData.autoTaxMode || "INTRA_STATE_GST");
   const [placeOfSupply, setPlaceOfSupply] = useState(ocrData.extracted?.invoice?.placeOfSupply || "");
   const [poNo, setPoNo] = useState(ocrData.extracted?.invoice?.poNo || "");
   const [otherCharges, setOtherCharges] = useState(ocrData.extracted?.totals?.otherCharges || 0);
@@ -181,6 +181,14 @@ export default function PurchaseOcrReview({ ocrData, previewUrl, onSaved, onCanc
           </div>
           <div className="form-group"><label>GSTIN (auto)</label><input value={suppliers.find(s => s.id === supplierId)?.gstNumber || ""} disabled /></div>
         </div>
+        {!supplierId && ocrData.extracted?.supplier?.name && (
+          <div className="info-msg" style={{ marginTop: 8 }}>
+            OCR extracted: <strong>{ocrData.extracted.supplier.name}</strong>
+            {ocrData.extracted.supplier.gstin && <> (GSTIN: {ocrData.extracted.supplier.gstin})</>}
+            {ocrData.extracted.supplier.phone && <> | Phone: {ocrData.extracted.supplier.phone}</>}
+            {" "}— not found in suppliers. Click "+ New Supplier" to add, or select a matching supplier above.
+          </div>
+        )}
         {supplierInfo && (
           <div className="supplier-info-box">
             {supplierInfo.address && <span><strong>Address:</strong> {supplierInfo.address}</span>}
