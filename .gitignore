@@ -12,3 +12,5 @@ storage/
 *.err
 *.log
 
+.vercel
+.env*
