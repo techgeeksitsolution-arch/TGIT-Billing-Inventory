@@ -25,15 +25,19 @@ function computeItem(item, taxMode, taxRatePercent) {
 const fmtPct = (v) => { const s = Number(v).toFixed(1); return s.endsWith(".0") ? s.slice(0, -2) : s; };
 
 export default function PurchaseOcrReview({ ocrData, previewUrl, onSaved, onCancel, onBack }) {
+  const ocrSupplier = ocrData.extracted?.supplier || {};
+  const ocrItems = ocrData.extracted?.items || [];
+  const ocrInvoice = ocrData.extracted?.invoice || {};
+
   const [suppliers, setSuppliers] = useState(ocrData.suppliers || []);
   const [products, setProducts] = useState(ocrData.products || []);
   const [taxRates, setTaxRates] = useState(ocrData.taxRates || []);
   const [supplierId, setSupplierId] = useState(ocrData.matchedSupplier?.id || "");
-  const [supplierInvoiceNo, setSupplierInvoiceNo] = useState(ocrData.extracted?.invoice?.supplierInvoiceNo || "");
-  const [invoiceDate, setInvoiceDate] = useState(ocrData.extracted?.invoice?.invoiceDate || new Date().toISOString().slice(0, 10));
+  const [supplierInvoiceNo, setSupplierInvoiceNo] = useState(ocrInvoice.supplierInvoiceNo || "");
+  const [invoiceDate, setInvoiceDate] = useState(ocrInvoice.invoiceDate || new Date().toISOString().slice(0, 10));
   const [taxMode, setTaxMode] = useState(ocrData.autoTaxMode || "INTRA_STATE_GST");
-  const [placeOfSupply, setPlaceOfSupply] = useState(ocrData.extracted?.invoice?.placeOfSupply || "");
-  const [poNo, setPoNo] = useState(ocrData.extracted?.invoice?.poNo || "");
+  const [placeOfSupply, setPlaceOfSupply] = useState(ocrInvoice.placeOfSupply || "");
+  const [poNo, setPoNo] = useState(ocrInvoice.poNo || "");
   const [otherCharges, setOtherCharges] = useState(ocrData.extracted?.totals?.otherCharges || 0);
   const [roundOffMode, setRoundOffMode] = useState("NEAREST");
   const [items, setItems] = useState([]);
@@ -43,7 +47,6 @@ export default function PurchaseOcrReview({ ocrData, previewUrl, onSaved, onCanc
   const [duplicateWarning, setDuplicateWarning] = useState(null);
   const [checkingDup, setCheckingDup] = useState(false);
   const [supplierInfo, setSupplierInfo] = useState(null);
-  const [showNewProduct, setShowNewProduct] = useState(null);
 
   useEffect(() => {
     const initItems = (ocrData.matchedItems || []).map(it => ({
@@ -140,6 +143,9 @@ export default function PurchaseOcrReview({ ocrData, previewUrl, onSaved, onCanc
     } finally { setSaving(false); }
   };
 
+  const matchedSupplier = suppliers.find(s => s.id === supplierId);
+  const supplierIsMatched = Boolean(matchedSupplier);
+
   return (
     <div className="page">
       <div className="page-header">
@@ -168,27 +174,32 @@ export default function PurchaseOcrReview({ ocrData, previewUrl, onSaved, onCanc
 
       <div className="form-card">
         <h3>Supplier Details</h3>
+        {ocrSupplier.name && (
+          <div style={{ background: "#f0fff4", border: "1px solid #c6f6d5", borderRadius: 6, padding: "8px 12px", marginBottom: 10, fontSize: "0.85rem" }}>
+            <strong style={{ color: "#276749" }}>OCR Detected:</strong>{" "}
+            <span>{ocrSupplier.name}</span>
+            {ocrSupplier.gstin && <span> | GSTIN: {ocrSupplier.gstin}</span>}
+            {ocrSupplier.phone && <span> | Phone: {ocrSupplier.phone}</span>}
+            {ocrSupplier.state && <span> | State: {ocrSupplier.state}</span>}
+            {supplierIsMatched && <span style={{ color: "#276749", fontWeight: 600 }}> — Matched to existing supplier</span>}
+          </div>
+        )}
         <div className="form-row">
           <div className="form-group" style={{ flex: 2 }}>
             <label>Supplier *</label>
             <div className="inline-quick-add">
               <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-                <option value="">Select supplier</option>
+                <option value="">{supplierIsMatched ? "" : "— Select Existing Supplier —"}</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}{s.gstNumber ? ` (${s.gstNumber})` : ""}</option>)}
               </select>
-              <button type="button" className="btn btn-sm btn-outline" onClick={() => setShowQuickAdd(true)}>+ New Supplier</button>
+              <button type="button" className="btn btn-sm btn-outline" onClick={() => setShowQuickAdd(true)}>+ Create New Supplier</button>
             </div>
           </div>
-          <div className="form-group"><label>GSTIN (auto)</label><input value={suppliers.find(s => s.id === supplierId)?.gstNumber || ""} disabled /></div>
-        </div>
-        {!supplierId && ocrData.extracted?.supplier?.name && (
-          <div className="info-msg" style={{ marginTop: 8 }}>
-            OCR extracted: <strong>{ocrData.extracted.supplier.name}</strong>
-            {ocrData.extracted.supplier.gstin && <> (GSTIN: {ocrData.extracted.supplier.gstin})</>}
-            {ocrData.extracted.supplier.phone && <> | Phone: {ocrData.extracted.supplier.phone}</>}
-            {" "}— not found in suppliers. Click "+ New Supplier" to add, or select a matching supplier above.
+          <div className="form-group">
+            <label>GSTIN</label>
+            <input value={matchedSupplier?.gstNumber || ocrSupplier.gstin || ""} disabled />
           </div>
-        )}
+        </div>
         {supplierInfo && (
           <div className="supplier-info-box">
             {supplierInfo.address && <span><strong>Address:</strong> {supplierInfo.address}</span>}
@@ -199,7 +210,7 @@ export default function PurchaseOcrReview({ ocrData, previewUrl, onSaved, onCanc
         )}
         {duplicateWarning && (
           <div className="warning-msg" style={{ marginTop: 8 }}>
-            ⚠ Duplicate detected: Invoice {supplierInvoiceNo} already exists as {duplicateWarning.existing?.internalNumber} (status: {duplicateWarning.existing?.status}).
+            Duplicate detected: Invoice {supplierInvoiceNo} already exists as {duplicateWarning.existing?.internalNumber} (status: {duplicateWarning.existing?.status}).
           </div>
         )}
       </div>
@@ -246,32 +257,44 @@ export default function PurchaseOcrReview({ ocrData, previewUrl, onSaved, onCanc
               </tr>
             </thead>
             <tbody>
-              {items.map((it, idx) => (
-                <tr key={idx}>
-                  <td>{idx + 1}</td>
-                  <td className="col-type">
-                    <select value={it.productId} onChange={(e) => selectProduct(idx, e.target.value)}>
-                      <option value="">— Manual —</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` [${p.sku}]` : ""}</option>)}
-                    </select>
-                  </td>
-                  <td className="col-desc"><input value={it.description} onChange={(e) => updateItem(idx, "description", e.target.value)} /></td>
-                  <td className="col-hsn"><input value={it.hsnCode} onChange={(e) => updateItem(idx, "hsnCode", e.target.value)} /></td>
-                  <td className="col-gst">
-                    <select value={it.taxRatePercent || ""} onChange={(e) => updateItem(idx, "taxRatePercent", e.target.value === "" ? 0 : Number(e.target.value))}>
-                      <option value="">Auto</option>
-                      {taxRates.map(t => <option key={t.id} value={String(t.rate)}>{t.rate}%</option>)}
-                    </select>
-                  </td>
-                  <td className="col-rate"><input type="number" min="0" step="0.01" value={it.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} /></td>
-                  <td className="col-qty"><input type="number" min="0" step="0.001" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} /></td>
-                  <td className="col-uom"><input value={it.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} /></td>
-                  <td className="col-taxable amount">{computed[idx]?.taxableValue.toFixed(2)}</td>
-                  <td className="col-tax amount">{(computed[idx]?.cgstAmount + computed[idx]?.sgstAmount + computed[idx]?.igstAmount).toFixed(2)}</td>
-                  <td className="col-total amount bold">{computed[idx]?.totalAmount.toFixed(2)}</td>
-                  <td className="col-action"><button className="btn btn-sm btn-danger" onClick={() => removeItem(idx)} disabled={items.length <= 1}>x</button></td>
-                </tr>
-              ))}
+              {items.map((it, idx) => {
+                const ocrItem = ocrItems[idx] || {};
+                const isMatched = Boolean(it.productId);
+                return (
+                  <tr key={idx}>
+                    <td>{idx + 1}</td>
+                    <td className="col-type">
+                      <select value={it.productId} onChange={(e) => selectProduct(idx, e.target.value)}>
+                        <option value="">— Manual —</option>
+                        {products.map(p => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` [${p.sku}]` : ""}</option>)}
+                      </select>
+                    </td>
+                    <td className="col-desc">
+                      <input value={it.description} onChange={(e) => updateItem(idx, "description", e.target.value)} />
+                      {ocrItem.description && ocrItem.description !== it.description && (
+                        <div style={{ fontSize: "0.72rem", color: "#718096" }}>OCR: {ocrItem.description}</div>
+                      )}
+                    </td>
+                    <td className="col-hsn"><input value={it.hsnCode} onChange={(e) => updateItem(idx, "hsnCode", e.target.value)} /></td>
+                    <td className="col-gst">
+                      <select value={it.taxRatePercent || ""} onChange={(e) => updateItem(idx, "taxRatePercent", e.target.value === "" ? 0 : Number(e.target.value))}>
+                        {it.taxRatePercent ? null : <option value="">—</option>}
+                        {taxRates.map(t => <option key={t.id} value={String(t.rate)}>{t.rate}%</option>)}
+                        {it.taxRatePercent > 0 && !taxRates.find(t => String(t.rate) === String(it.taxRatePercent)) && (
+                          <option value={String(it.taxRatePercent)}>{it.taxRatePercent}% (from OCR)</option>
+                        )}
+                      </select>
+                    </td>
+                    <td className="col-rate"><input type="number" min="0" step="0.01" value={it.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} /></td>
+                    <td className="col-qty"><input type="number" min="0" step="0.001" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} /></td>
+                    <td className="col-uom"><input value={it.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} /></td>
+                    <td className="col-taxable amount">{computed[idx]?.taxableValue.toFixed(2)}</td>
+                    <td className="col-tax amount">{(computed[idx]?.cgstAmount + computed[idx]?.sgstAmount + computed[idx]?.igstAmount).toFixed(2)}</td>
+                    <td className="col-total amount bold">{computed[idx]?.totalAmount.toFixed(2)}</td>
+                    <td className="col-action"><button className="btn btn-sm btn-danger" onClick={() => removeItem(idx)} disabled={items.length <= 1}>x</button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

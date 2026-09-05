@@ -8,6 +8,8 @@ const ALLOWED_MIMES = [
 ];
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
+const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
 export function validateUploadFile(file) {
   if (!file) return { ok: false, error: "NO_FILE", message: "No file provided" };
   if (!ALLOWED_MIMES.includes(file.mimetype)) {
@@ -619,9 +621,9 @@ export function parseOcrText(text) {
   const taxableTotal = findAmount(clean, [
     /(?:Taxable\s*(?:Value|Amount|Total)|Base\s*Amount)\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
   ]);
-  const cgstTotal = findAmount(clean, [/(?:CGST|Central\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
-  const sgstTotal = findAmount(clean, [/(?:SGST|State\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
-  const igstTotal = findAmount(clean, [/(?:IGST|Integrated\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
+  const cgstTotal = findAmount(clean, [/(?:CGST|Central\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*(?:\d+(?:\.\d+)?%\s*[:.\-\s:]*)?(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
+  const sgstTotal = findAmount(clean, [/(?:SGST|State\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*(?:\d+(?:\.\d+)?%\s*[:.\-\s:]*)?(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
+  const igstTotal = findAmount(clean, [/(?:IGST|Integrated\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*(?:\d+(?:\.\d+)?%\s*[:.\-\s:]*)?(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
   const grandTotal = findAmount(clean, [
     /(?:Grand\s*Total|Sub\s*Total|Total\s*(?:Amount|Payable)|Amount\s*(?:Payable|Due))\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
   ]);
@@ -633,26 +635,41 @@ export function parseOcrText(text) {
   else if (!supplierInvoiceNo || !invoiceDate) confidence = "MEDIUM";
   if (items.length === 0) confidence = "LOW";
 
+  const mappedItems = items.filter(it => it.description && !/amount\s*in\s*words|sub\s*total|grand\s*total|balance|signature|please\s*note/i.test(it.description) && (it.unitPrice > 0 || it.totalAmount > 0 || it.hsnCode)).map(it => {
+    let desc = it.description.replace(/\*\*/g, "").replace(/HSN\s*(?:Code)?\s*:\s*\d{4,8}/gi, "").trim();
+    let hsn = it.hsnCode;
+    if (!hsn) { const m = it.description.match(/HSN\s*(?:Code)?\s*:\s*(\d{4,8})/i); if (m) hsn = m[1]; }
+    return {
+      description: desc,
+      hsnCode: hsn || null,
+      quantity: it.quantity || 1,
+      unitPrice: it.unitPrice || 0,
+      taxableAmount: it.taxableAmount || 0,
+      totalAmount: it.totalAmount || 0,
+      gstPercent: it.gstPercent || null,
+      cgstRate: 0, sgstRate: 0, igstRate: 0,
+      cgstAmount: 0, sgstAmount: 0, igstAmount: 0,
+      discount: 0, uom: "Nos",
+    };
+  });
+
+  if (mappedItems.length > 0) {
+    const itemsNeedInference = mappedItems.every(it => !it.gstPercent);
+    if (itemsNeedInference && taxableTotal > 0) {
+      let inferredRate = 0;
+      if (igstTotal > 0) inferredRate = round2((igstTotal / taxableTotal) * 100);
+      else if (cgstTotal > 0 && sgstTotal > 0) inferredRate = round2(((cgstTotal + sgstTotal) / taxableTotal) * 100);
+      else if (cgstTotal > 0) inferredRate = round2((cgstTotal / taxableTotal) * 200);
+      if (inferredRate > 0) {
+        mappedItems.forEach(it => { it.gstPercent = String(inferredRate); });
+      }
+    }
+  }
+
   return {
     supplier: { name: supplierName, address, gstin, state, stateCode, phone, email },
     invoice: { supplierInvoiceNo, invoiceDate, dueDate, poNo, placeOfSupply },
-    items: items.filter(it => it.description && !/amount\s*in\s*words|sub\s*total|grand\s*total|balance|signature|please\s*note/i.test(it.description) && (it.unitPrice > 0 || it.totalAmount > 0 || it.hsnCode)).map(it => {
-      let desc = it.description.replace(/\*\*/g, "").replace(/HSN\s*(?:Code)?\s*:\s*\d{4,8}/gi, "").trim();
-      let hsn = it.hsnCode;
-      if (!hsn) { const m = it.description.match(/HSN\s*(?:Code)?\s*:\s*(\d{4,8})/i); if (m) hsn = m[1]; }
-      return {
-        description: desc,
-        hsnCode: hsn || null,
-        quantity: it.quantity || 1,
-        unitPrice: it.unitPrice || 0,
-        taxableAmount: it.taxableAmount || 0,
-        totalAmount: it.totalAmount || 0,
-        gstPercent: it.gstPercent || null,
-        cgstRate: 0, sgstRate: 0, igstRate: 0,
-        cgstAmount: 0, sgstAmount: 0, igstAmount: 0,
-        discount: 0, uom: "Nos",
-      };
-    }),
+    items: mappedItems,
     totals: { taxableTotal, cgstTotal, sgstTotal, igstTotal, otherCharges, roundOff, grandTotal },
     confidence,
   };
