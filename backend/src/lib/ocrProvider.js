@@ -397,16 +397,24 @@ function extractDate(text, labelPatterns) {
   const cleaned = text.replace(/\|/g, " ");
   const raw = findField(cleaned, labelPatterns);
   if (!raw) return null;
-  const d = new Date(raw);
+  const trimmed = raw.split("\n")[0].trim();
+  const mMon = trimmed.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})/i);
+  if (mMon) {
+    const months = { january:"01", february:"02", march:"03", april:"04", may:"05", june:"06", july:"07", august:"08", september:"09", october:"10", november:"11", december:"12" };
+    const monKey = mMon[1].toLowerCase();
+    const d = new Date(`${mMon[3]}-${months[monKey]}-${mMon[2].padStart(2, "0")}`);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  const d = new Date(trimmed);
   if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  const m2 = raw.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  const m2 = trimmed.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (m2) {
     let [, dd, mm, yy] = m2;
     if (yy.length === 2) yy = "20" + yy;
     const d2 = new Date(`${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`);
     if (!isNaN(d2.getTime())) return d2.toISOString().slice(0, 10);
   }
-  const m3 = raw.match(/(\d{1,2})[\/\-.](\w+)[\/\-.](\d{2,4})/);
+  const m3 = trimmed.match(/(\d{1,2})[\/\-.](\w+)[\/\-.](\d{2,4})/);
   if (m3) {
     const months = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
     const monKey = m3[2].toLowerCase().slice(0, 3);
@@ -439,8 +447,11 @@ function extractItems(text) {
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
   const itemPattern = /^(.{3,60}?)\s+(\d+(?:\.\d+)?)\s+(?:x\s*)?(\d+(?:,\d{3})*(?:\.\d+)?)\s+(?:x\s*)?(\d+(?:,\d{3})*(?:\.\d+)?)/i;
   const simplePattern = /^(.{3,50}?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:,\d{3})*(?:\.\d+)?)\s*$/i;
+  const hsnOnlyPattern = /HSN\s*(?:Code)?\s*[:.\-]?\s*(\d{4,8})/i;
+  const pricePattern = /[₹$]\s*([\d,]+(?:\.\d{2})?)/;
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const m = line.match(itemPattern);
     if (m) {
       items.push({
@@ -459,6 +470,32 @@ function extractItems(text) {
         unitPrice: parseFloat(m2[2].replace(/,/g, "")) || 0,
         totalAmount: parseFloat(m2[3].replace(/,/g, "")) || 0,
       });
+    } else if (i + 3 < lines.length) {
+      const nextLines = lines.slice(i, i + 6).join("\n");
+      if (hsnOnlyPattern.test(nextLines) && !/^\d/.test(lines[i]) && !/^HSN|SAC|January|February|March|April|May|June|July|August|September|October|November|December|Invoice|Order|Payment|Tax|Product|Quantity|Price|Card|Credit|Sub|Total|Grand|Amount|IGST|CGST|SGST|Summary|Jurisdiction|Our|This|Bill|Ship/i.test(line) && line.length >= 3 && line.length <= 60) {
+        let qty = 0, rate = 0, total = 0, hsn = null;
+        for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+          if (!hsn) { const hm = lines[j].match(hsnOnlyPattern); if (hm) { hsn = hm[1]; continue; } }
+          const pm = lines[j].match(pricePattern);
+          if (pm) {
+            const val = parseFloat(pm[1].replace(/,/g, ""));
+            if (val > 0) {
+          if (rate === 0) { qty = qty || 1; rate = val; }
+          else if (total === 0) total = val;
+            }
+          }
+          if (qty === 0) { const qm = lines[j].match(/^(\d+(?:\.\d+)?)$/); if (qm) qty = parseFloat(qm[1]); }
+        }
+        if (rate > 0 || total > 0) {
+          items.push({
+            description: line,
+            hsnCode: hsn,
+            quantity: qty || 1,
+            unitPrice: rate,
+            totalAmount: total || rate,
+          });
+        }
+      }
     }
   }
   return items;
@@ -600,16 +637,28 @@ export function parseOcrText(text) {
 
   const address = findField(clean, [
     /(?:Address|Addr)\s*[:.\-]\s*(.{5,120})/i,
-  ]);
+  ]) || (() => {
+    const lines = clean.split("\n").map(l => l.trim()).filter(Boolean);
+    const nameIdx = lines.findIndex(l => l === supplierName);
+    if (nameIdx >= 0) {
+      const addrLines = [];
+      for (let i = nameIdx + 1; i < Math.min(nameIdx + 5, lines.length); i++) {
+        if (/GSTIN|GST\s*(?:No|Number)|Phone|Email|UDYAM/i.test(lines[i])) break;
+        addrLines.push(lines[i]);
+      }
+      return addrLines.length > 0 ? addrLines.join(", ") : null;
+    }
+    return null;
+  })();
   const state = extractState(clean);
   const phone = findField(clean, [/(?:Phone|Tel|Mobile)\s*[:.\-]\s*([\d\s\-+]{8,15})/i]);
   const email = findField(clean, [/(?:Email|E-mail)\s*[:.\-]\s*([\w.+-]+@[\w.-]+\.\w{2,})/i]);
 
   const supplierInvoiceNo = extractInvoiceNumber(clean);
   const invoiceDate = extractDate(clean, [
-    /(?:Invoice\s*Date|Date\s*of\s*Invoice|Bill\s*Date)\s*[:.\-\s:]*([\d\/\-.\w\s]+)/i,
+    /(?:Invoice\s*Date|Date\s*of\s*Invoice|Bill\s*Date)\s*[:.\-\s:]*([\d\/\-.,\w\s]+)/i,
   ]);
-  const dueDate = extractDate(clean, [/(?:Due\s*Date|Payment\s*Due)\s*[:.\-\s:]*([\d\/\-.\w\s]+)/i]);
+  const dueDate = extractDate(clean, [/(?:Due\s*Date|Payment\s*Due)\s*[:.\-\s:]*([\d\/\-.,\w\s]+)/i]);
   const poNo = findField(clean, [/(?:PO\s*(?:No|Number|#|\.?)|Purchase\s*Order|Order\s*(?:No|Number))\s*[:.\-\s:]*([A-Z0-9][\w\/\-]+)/i]);
   const placeOfSupply = findField(clean, [/(?:Place\s*of\s*Supply|POS)\s*[:.\-\s:]*([\w\s,.-]{3,50})/i]);
 
@@ -619,14 +668,14 @@ export function parseOcrText(text) {
   }
 
   const taxableTotal = findAmount(clean, [
-    /(?:Taxable\s*(?:Value|Amount|Total)|Base\s*Amount)\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
+    /(?:Taxable\s*(?:Value|Amount|Total)|Base\s*Amount|Sub\s*Total|Subtotal)\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
   ]);
   const cgstTotal = findAmount(clean, [/(?:CGST|Central\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*(?:\d+(?:\.\d+)?%\s*[:.\-\s:]*)?(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
   const sgstTotal = findAmount(clean, [/(?:SGST|State\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*(?:\d+(?:\.\d+)?%\s*[:.\-\s:]*)?(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
   const igstTotal = findAmount(clean, [/(?:IGST|Integrated\s*GST)\s*(?:\([^)]*\))?\s*[:.\-\s:]*(?:\d+(?:\.\d+)?%\s*[:.\-\s:]*)?(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]);
   const grandTotal = findAmount(clean, [
-    /(?:Grand\s*Total|Sub\s*Total|Total\s*(?:Amount|Payable)|Amount\s*(?:Payable|Due))\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
-  ]);
+    /(?:Grand\s*Total|Total\s*(?:Amount|Payable|Due)|Amount\s*(?:Payable|Due))\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i,
+  ]) || findAmount(clean, [/(?:^|\n)\s*Total\s*[:.\-\s:]*\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/im]);
   const otherCharges = findAmount(clean, [/(?:Other\s*Charges?|Freight|Shipping)\s*[:.\-]?\s*(?:Rs\.?\s*)?([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]) || 0;
   const roundOff = findAmount(clean, [/(?:Round\s*[- ]?off|Adjustment\/?Round\s*off)\s*[:.\-]?\s*([₹$]?\s*[\d,]+(?:\.\d{1,2})?)/i]) || 0;
 
@@ -660,6 +709,9 @@ export function parseOcrText(text) {
       if (igstTotal > 0) inferredRate = round2((igstTotal / taxableTotal) * 100);
       else if (cgstTotal > 0 && sgstTotal > 0) inferredRate = round2(((cgstTotal + sgstTotal) / taxableTotal) * 100);
       else if (cgstTotal > 0) inferredRate = round2((cgstTotal / taxableTotal) * 200);
+      const commonRates = [0, 5, 12, 18, 28];
+      const nearest = commonRates.reduce((prev, curr) => Math.abs(curr - inferredRate) < Math.abs(prev - inferredRate) ? curr : prev);
+      if (Math.abs(nearest - inferredRate) < 1) inferredRate = nearest;
       if (inferredRate > 0) {
         mappedItems.forEach(it => { it.gstPercent = String(inferredRate); });
       }
